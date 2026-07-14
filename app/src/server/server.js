@@ -17,6 +17,8 @@ const path = require('node:path');
 const PORT = 9977;
 const HOST = '127.0.0.1';
 const WS_BROADCAST_INTERVAL = 500; // ms
+const DEBUG = process.env.IDMAM_DEBUG === '1' || process.env.DEBUG === 'idmam';
+const debugLog = DEBUG ? console.log.bind(console) : () => {};
 
 class IDRAMServer {
   /**
@@ -316,11 +318,11 @@ class IDRAMServer {
       }
 
       this.wsClients.add(ws);
-      console.log(`[WS] Client connected (total: ${this.wsClients.size})`);
+      debugLog(`[WS] Client connected (total: ${this.wsClients.size})`);
 
       ws.on('close', () => {
         this.wsClients.delete(ws);
-        console.log(`[WS] Client disconnected (total: ${this.wsClients.size})`);
+        debugLog(`[WS] Client disconnected (total: ${this.wsClients.size})`);
       });
 
       ws.on('error', () => {
@@ -420,8 +422,8 @@ class IDRAMServer {
       };
 
       this.server.listen(PORT, HOST, () => {
-        console.log(`[IDMAM] API Server running at http://${HOST}:${PORT}`);
-        console.log(`[IDMAM] WebSocket at ws://${HOST}:${PORT}/ws`);
+        debugLog(`[IDMAM] API Server running at http://${HOST}:${PORT}`);
+        debugLog(`[IDMAM] WebSocket at ws://${HOST}:${PORT}/ws`);
         resolve();
       });
 
@@ -457,7 +459,7 @@ class IDRAMServer {
 
       if (this.server) {
         this.server.close(() => {
-          console.log('[IDMAM] Server stopped');
+          debugLog('[IDMAM] Server stopped');
           resolve();
         });
       } else {

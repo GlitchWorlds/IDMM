@@ -13,6 +13,7 @@
     "contextMenus"
   ],
 
+  "_comment_host_permissions": "host_permissions needed for download URL interception — IDMAM must intercept downloads from any URL via the downloads API; narrowing this would break download capture from arbitrary sites.",
   "host_permissions": [
     "<all_urls>"
   ],
