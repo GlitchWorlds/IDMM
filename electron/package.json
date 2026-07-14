@@ -24,6 +24,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "installer.nsh",
+      "assets/**/*",
       "app-engine/**/*",
       "ui/build/**/*",
       "node_modules/**/*"
@@ -34,7 +36,7 @@
         "to": "extension"
       }
     ],
-    "asar": true,
+    "asar": false,
     "win": {
       "target": [
         {

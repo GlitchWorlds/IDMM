@@ -6,11 +6,26 @@ const os = require('node:os');
 const fs = require('node:fs');
 
 // ─── IDMAM Core ─────────────────────────────────────────────────
-// In dev mode: import from ../app/. In packaged mode: from app.asar/app-engine/
-const isPackaged = app.isPackaged;
-const APP_DIR = isPackaged
-  ? path.join(__dirname, 'app-engine')
-  : path.join(__dirname, '..', 'app');
+// Resolve engine paths — works in both dev and packaged mode
+function resolveEngine() {
+  // Try multiple candidate paths (covers dev, asar, no-asar, portable)
+  const candidates = [
+    path.join(__dirname, 'app-engine'),          // electron/app-engine/ (prebuild copy)
+    path.join(__dirname, '..', 'app'),            // ../app/ (dev mode)
+    path.join(process.resourcesPath || '', 'app-engine'), // resources/app-engine/ (extraResources)
+    path.join(path.dirname(process.execPath), 'resources', 'app-engine'),
+  ];
+  for (const dir of candidates) {
+    try {
+      const testPath = path.join(dir, 'src', 'db', 'sqlite.js');
+      if (fs.existsSync(testPath)) return dir;
+    } catch {}
+  }
+  // Fallback: let it fail with a clear error
+  throw new Error(`[IDMAM] Cannot find engine. Tried: ${candidates.join(', ')}`);
+}
+
+const APP_DIR = resolveEngine();
 
 const IDMAMDatabase = require(path.join(APP_DIR, 'src', 'db', 'sqlite'));
 const DownloadManager = require(path.join(APP_DIR, 'src', 'engine', 'downloader'));
