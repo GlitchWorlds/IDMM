@@ -110,6 +110,7 @@
     <!-- Download defaults -->
     <section class="section">
       <h2 class="section-title">⚙️ Download Defaults</h2>
+      <p class="section-desc">These settings apply to new downloads only.</p>
       <div class="setting-row">
         <label for="max-threads">Default Threads per Download</label>
         <div class="setting-control">
@@ -120,7 +121,11 @@
       <div class="setting-row">
         <label for="default-save-path">Default Save Path</label>
         <div class="setting-control">
-          <input type="text" id="default-save-path" placeholder="Leave empty for IDMAM default" value="">
+          <div class="save-path-row">
+            <input type="text" id="default-save-path" placeholder="Leave empty for IDMAM default" value="">
+            <button type="button" id="btn-browse" class="btn btn-secondary btn-browse">Browse…</button>
+          </div>
+          <input type="file" id="folder-picker" webkitdirectory style="display:none">
           <span class="setting-hint">Override IDMAM's default save directory</span>
         </div>
       </div>

@@ -2,18 +2,16 @@
   "manifest_version": 3,
   "name": "IDMAM — Download Manager AI Max",
   "short_name": "IDMAM",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Free, open-source download manager with multi-threaded acceleration. Intercepts downloads and sends them to IDMAM for maximum speed.",
 
   "permissions": [
     "downloads",
-    "downloads.shelf",
     "activeTab",
     "storage",
     "contextMenus"
   ],
 
-  "_comment_host_permissions": "host_permissions needed for download URL interception — IDMAM must intercept downloads from any URL via the downloads API; narrowing this would break download capture from arbitrary sites.",
   "host_permissions": [
     "<all_urls>"
   ],

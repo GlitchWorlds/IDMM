@@ -15,6 +15,12 @@ let serverOnline = false;
 let activeDownloadCount = 0;
 let interceptedIds = new Set(); // Track downloads we've intercepted to avoid loops
 
+// E5: WebSocket state
+let ws = null;
+let wsReconnectDelay = 1000; // Start at 1s, doubles on each failure, max 30s
+const WS_MAX_DELAY = 30000;
+const WS_URL = 'ws://127.0.0.1:9977';
+
 // ─── Health Check ───────────────────────────────────────────────
 
 async function checkServer() {
@@ -38,6 +44,57 @@ function updateBadge() {
   } else {
     chrome.action.setBadgeText({ text: '' });
   }
+}
+
+// ─── E5: WebSocket real-time sync ─────────────────────────────────
+
+function connectWebSocket() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return; // Already connected or connecting
+  }
+
+  try {
+    ws = new WebSocket(WS_URL);
+  } catch {
+    scheduleReconnect();
+    return;
+  }
+
+  ws.onopen = () => {
+    console.log('[IDMAM] WebSocket connected');
+    wsReconnectDelay = 1000; // Reset backoff on successful connection
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      // Broadcast download update to popup(s)
+      chrome.runtime.sendMessage({
+        type: 'DOWNLOAD_UPDATE',
+        downloads: data.downloads || data,
+      }).catch(() => {
+        // No listeners (popup closed) — not an error
+      });
+    } catch (err) {
+      console.warn('[IDMAM] WebSocket message parse error:', err.message);
+    }
+  };
+
+  ws.onclose = () => {
+    console.log('[IDMAM] WebSocket closed, reconnecting...');
+    ws = null;
+    scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    // onclose will fire after onerror — reconnect handled there
+  };
+}
+
+function scheduleReconnect() {
+  const delay = wsReconnectDelay;
+  wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_DELAY);
+  setTimeout(connectWebSocket, delay);
 }
 
 // ─── Send Download to IDMAM ─────────────────────────────────────
@@ -263,6 +320,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
       case 'SETTINGS_UPDATED':
+        // E10: Broadcast to all popup instances so they can refresh settings
+        chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED' }).catch(() => {});
         return { ok: true };
 
       default:
@@ -281,9 +340,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Initial health check
   await checkServer();
 
-  // Periodic checks
+  // E5: Start WebSocket for real-time updates
+  connectWebSocket();
+
+  // Periodic checks (fallback polling)
   setInterval(checkServer, 10000); // Health check every 10s
-  setInterval(pollDownloads, 2000); // Poll downloads every 2s
+  setInterval(pollDownloads, 5000); // E5: Poll downloads every 5s (reduced from 2s)
 
   console.log('[IDMAM] Extension service worker started');
 })();

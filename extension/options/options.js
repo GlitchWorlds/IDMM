@@ -18,6 +18,8 @@ const $minSize = document.getElementById('min-size');
 const $btnSave = document.getElementById('btn-save');
 const $btnReset = document.getElementById('btn-reset');
 const $saveStatus = document.getElementById('save-status');
+const $btnBrowse = document.getElementById('btn-browse');
+const $folderPicker = document.getElementById('folder-picker');
 
 // Intercept toggles
 const $interceptToggles = {
@@ -50,6 +52,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupEventListeners() {
   $btnSave.addEventListener('click', saveSettings);
   $btnReset.addEventListener('click', resetSettings);
+
+  // E3: Browse button — open hidden folder picker
+  $btnBrowse.addEventListener('click', () => {
+    $folderPicker.click();
+  });
+
+  $folderPicker.addEventListener('change', () => {
+    const files = $folderPicker.files;
+    if (!files || files.length === 0) return;
+
+    // Extract folder name from webkitRelativePath (e.g. "MyFolder/file.txt" → "MyFolder")
+    const relativePath = files[0].webkitRelativePath || '';
+    const folderName = relativePath.split('/')[0] || '';
+
+    if (folderName) {
+      $defaultSavePath.value = folderName;
+    }
+
+    // Reset so the same folder can be re-selected
+    $folderPicker.value = '';
+  });
 }
 
 // ─── Load settings from storage ────────────────────────────────────

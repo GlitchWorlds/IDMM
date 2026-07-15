@@ -20,6 +20,7 @@ const $statsActive = document.getElementById('stats-active');
 const $statsSpeed = document.getElementById('stats-speed');
 const $statsQueued = document.getElementById('stats-queued');
 const $tabs = document.querySelectorAll('.tab');
+const $savePathHint = document.getElementById('save-path-hint'); // E9
 
 // ─── State ─────────────────────────────────────────────────────────
 
@@ -35,9 +36,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await restoreLastTab();
   await checkServerStatus();
   await refreshDownloads();
+  await loadSavePathHint(); // E9: Show save path if configured
 
-  // Refresh every 2 seconds
-  refreshTimer = setInterval(refreshDownloads, 2000);
+  // E5: Reduced polling — 5s as fallback (WebSocket provides real-time)
+  refreshTimer = setInterval(refreshDownloads, 5000);
 });
 
 // Clean up on popup close
@@ -66,6 +68,22 @@ function setupEventListeners() {
       renderDownloads();
     });
   });
+
+  // E5: Listen for real-time download updates from background WebSocket
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'DOWNLOAD_UPDATE' && message.downloads) {
+      downloads = message.downloads;
+      online = true;
+      updateStatusBadge();
+      renderDownloads();
+      updateStats();
+    }
+
+    // E10: Listen for settings changes from options page
+    if (message.type === 'SETTINGS_UPDATED') {
+      loadSavePathHint();
+    }
+  });
 }
 
 // ─── Tab memory (B4 / T1 / T2) ────────────────────────────────────
@@ -81,6 +99,24 @@ async function restoreLastTab() {
       resolve();
     });
   });
+}
+
+// ─── E9: Save path hint ────────────────────────────────────────────
+
+async function loadSavePathHint() {
+  try {
+    const settings = await IDMAM_API.getSettings();
+    const path = settings.defaultSavePath;
+    if (path) {
+      $savePathHint.innerHTML = 'Save to: <strong>' + escapeHtml(path) + '</strong>';
+      $savePathHint.title = path;
+      $savePathHint.style.display = 'block';
+    } else {
+      $savePathHint.style.display = 'none';
+    }
+  } catch {
+    $savePathHint.style.display = 'none';
+  }
 }
 
 // ─── Server status ─────────────────────────────────────────────────
@@ -302,7 +338,8 @@ async function handleAction(action, id, data = {}) {
         break;
       case 'open-folder':
         await copyToClipboard(data.path);
-        showTooltip(data.btn, 'Path copied!');
+        // E6: Show prominent toast instead of small tooltip
+        showToast('Path copied! Paste in Explorer address bar (Win+R)');
         return; // No refresh needed
     }
     await refreshDownloads();
@@ -377,6 +414,18 @@ function showError(message) {
 
   const toast = document.createElement('div');
   toast.className = 'error-toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// E6: Prominent info toast for Open Folder / clipboard actions
+function showToast(message) {
+  document.querySelectorAll('.info-toast').forEach(t => t.remove());
+
+  const toast = document.createElement('div');
+  toast.className = 'info-toast';
   toast.textContent = message;
   document.body.appendChild(toast);
 

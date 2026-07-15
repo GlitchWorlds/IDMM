@@ -275,6 +275,28 @@ select {
   word-spacing: 2px;
 }
 
+/* ─── Save path row ───────────────────────────────────────────── */
+
+.save-path-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 300px;
+}
+
+.save-path-row input[type="text"] {
+  flex: 1;
+  max-width: none;
+}
+
+.btn-browse {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
 /* ─── Buttons ─────────────────────────────────────────────────── */
 
 .btn {
