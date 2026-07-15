@@ -11,6 +11,7 @@ const { mergeAndVerify, cleanupChunks } = require('./merge');
 const { resolveFilename, ensureUniqueFilename } = require('../utils/filename');
 const { detectMime, resolveCategory } = require('../utils/mime');
 const { hashString } = require('../utils/hash');
+const { validateRedirect } = require('../utils/ssrf');
 
 /**
  * IDMAM Core Download Manager.
@@ -501,6 +502,8 @@ class DownloadManager {
         // Handle redirects
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           res.resume(); // R4: Drain response body to free socket before following redirect
+          // R1: SSRF — validate redirect target before following
+          validateRedirect(res.headers.location, url);
           const newUrl = new URL(res.headers.location, url).href;
           resolve(this._probeUrl(newUrl, headers, redirectCount + 1));
           return;
@@ -983,6 +986,8 @@ class DownloadManager {
         // prevent late-firing 'error' or 'timeout' events on the old socket
         // from racing with the new recursive request.
         req.destroy();
+        // R1: SSRF — validate redirect target before following
+        try { validateRedirect(res.headers.location, state.url); } catch (e) { safeReject(e); return; }
         state.url = new URL(res.headers.location, state.url).href;
         this._doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject);
         return;

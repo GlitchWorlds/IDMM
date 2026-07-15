@@ -5,6 +5,7 @@ const http = require('node:http');
 const https = require('node:https');
 const fs = require('node:fs');
 const path = require('node:path');
+const { validateRedirect } = require('../utils/ssrf');
 
 /**
  * IDMAM Chunk Worker Thread.
@@ -121,6 +122,8 @@ function downloadChunk(attempt, currentUrl, redirectCount = 0) {
           reject(new Error(`Too many redirects (max 5) for chunk ${chunkIndex}`));
           return;
         }
+        // R1: SSRF — validate redirect target before following
+        try { validateRedirect(res.headers.location, currentUrl); } catch (e) { reject(e); return; }
         // Follow redirect — use updated URL
         const newUrl = new URL(res.headers.location, currentUrl).href;
         resolve(downloadChunk(attempt, newUrl, redirectCount + 1)); // retry with new URL

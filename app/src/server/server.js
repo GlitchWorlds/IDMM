@@ -29,13 +29,13 @@ const SAFE_ERROR_PATTERNS = [
   /^Download not found$/i,
   /^Download already (active|paused)$/i,
   /^Download is not (active|paused)$/i,
-  /^URL already being downloaded$/i,
+  /^URL is already being downloaded$/i,
   /^Invalid URL$/i,
   /^No file provided$/i,
   /^Invalid setting/i,
   /^save_to path not allowed$/i,
   /^Cannot delete active download$/i,
-  /^Concurrent download limit reached/i,
+  /^Maximum concurrent downloads/i,
 ];
 function sanitizeError(err) {
   const msg = err.message || 'Unknown error';
