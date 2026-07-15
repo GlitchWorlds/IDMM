@@ -152,6 +152,7 @@ class DownloadManager {
       referrer,
       headers: download.headers,
       noRangeSupport: false,
+      speedLimit: (parseInt(this.settings.speed_limit_global, 10) || 0) * 1024, // KB/s → bytes/s
     };
 
     this.active.set(downloadId, state);
@@ -196,6 +197,20 @@ class DownloadManager {
 
     state.status = 'pausing';
 
+    // Mark workers as intentionally terminated before terminating them.
+    // This prevents late-firing exit handlers from marking chunks as 'failed'
+    // when a subsequent resume spawns new workers for the same chunk.
+    for (const worker of state.workers) {
+      if (worker && typeof worker.__terminated !== 'undefined') {
+        worker.__terminated = true;
+      } else if (worker) {
+        worker.__terminated = true;
+      }
+    }
+
+    // Flush all chunk progress to DB and resume file BEFORE terminating
+    this._flushChunkState(state);
+
     // Terminate all worker threads
     for (const worker of state.workers) {
       if (worker && !worker.exited) {
@@ -227,7 +242,13 @@ class DownloadManager {
     // Also try loading from resume state file
     const resumeState = this.resume.loadState(downloadId);
 
-    // Build state object
+    // Build state object — cross-validate DB chunk state with actual .part file sizes
+    const downloadTempDir = this.resume.getDownloadTempDir(downloadId);
+    const chunks = this._buildResumeChunks(downloadId, dbDownload);
+
+    // Recalculate total downloaded from validated chunks
+    const totalDownloaded = chunks.reduce((sum, c) => sum + c.downloaded, 0);
+
     const state = {
       id: downloadId,
       url: dbDownload.url,
@@ -236,16 +257,10 @@ class DownloadManager {
       totalSize: dbDownload.total_size,
       threads: dbDownload.threads,
       status: 'downloading',
-      downloaded: dbDownload.downloaded || 0,
+      downloaded: totalDownloaded,
       speed: 0,
       eta: 0,
-      chunks: (dbDownload.chunks || []).map(c => ({
-        index: c.chunk_index,
-        start: c.start_byte,
-        end: c.end_byte,
-        downloaded: c.downloaded_bytes || 0,
-        status: c.status,
-      })),
+      chunks,
       workers: [],
       startedAt: Date.now(),
       checksum: dbDownload.checksum || null,
@@ -253,6 +268,7 @@ class DownloadManager {
       referrer: dbDownload.referrer,
       headers: dbDownload.headers,
       noRangeSupport: false,
+      speedLimit: (parseInt(this.settings.speed_limit_global, 10) || 0) * 1024, // KB/s → bytes/s
     };
 
     this.active.set(downloadId, state);
@@ -260,8 +276,8 @@ class DownloadManager {
 
     this.db.updateDownload(downloadId, { status: 'downloading' });
 
-    const retryCount = this.settings.retry_count || 3;
-    const timeoutMs = this.settings.timeout_ms || 30000;
+    const retryCount = parseInt(this.settings.retry_count, 10) || 3;
+    const timeoutMs = parseInt(this.settings.timeout_ms, 10) || 30000;
 
     const requestHeaders = {};
     if (state.headers) Object.assign(requestHeaders, state.headers);
@@ -569,6 +585,7 @@ class DownloadManager {
         maxRetries: opts.retryCount,
         chunkIndex: chunk.index,
         downloadId: state.id,
+        speedLimit: this._getPerWorkerSpeedLimit(state),
       },
     });
 
@@ -590,7 +607,11 @@ class DownloadManager {
       const idx = state.workers.indexOf(worker);
       if (idx !== -1) state.workers.splice(idx, 1);
 
-      if (code !== 0 && chunk.status !== 'done') {
+      // Skip failure marking if worker was intentionally terminated (pause/cancel)
+      // or if this is a stale exit handler from a previous worker generation
+      if (worker.__terminated) return;
+
+      if (code !== 0 && chunk.status !== 'done' && chunk.status !== 'paused') {
         console.error(`[IDMAM] Worker exited with code ${code} for chunk ${chunk.index}`);
         chunk.status = 'failed';
       }
@@ -620,12 +641,24 @@ class DownloadManager {
         // Update total downloaded
         this._recalcProgress(state);
 
+        // Note: Speed limiting is handled at the worker level via token-bucket
+        // in chunk-worker.js — no need to terminate workers from the main thread.
+
         // Persist to resume file periodically (every ~1MB)
         if (msg.downloaded % (1024 * 1024) < 65536) {
           this.resume.updateChunkState(state.id, chunk.index, {
             downloaded: msg.downloaded,
             status: 'downloading',
           });
+          // Also update DB chunk record periodically for resume reliability
+          const chunkRows = this.db.getChunks(state.id);
+          const dbChunk = chunkRows.find(c => c.chunk_index === chunk.index);
+          if (dbChunk) {
+            this.db.updateChunk(dbChunk.id, {
+              downloaded_bytes: msg.downloaded,
+              status: 'downloading',
+            });
+          }
         }
         break;
 
@@ -705,6 +738,109 @@ class DownloadManager {
       }
     }
     state.workers = [];
+  }
+
+  // ─── Internal: Chunk State Flush ────────────────────────────────
+
+  /**
+   * Build chunk descriptors for resume, cross-referencing DB, resume file, and disk.
+   * @param {string} downloadId
+   * @param {Object} dbDownload
+   * @returns {Object[]}
+   */
+  _buildResumeChunks(downloadId, dbDownload) {
+    // Try resume file first (most up-to-date)
+    const resumeState = this.resume.loadState(downloadId);
+    const resumeChunks = resumeState && resumeState.chunks ? resumeState.chunks : [];
+
+    const dbChunks = dbDownload.chunks || [];
+    const result = [];
+
+    for (const dbC of dbChunks) {
+      const chunk = {
+        index: dbC.chunk_index,
+        start: dbC.start_byte,
+        end: dbC.end_byte,
+        downloaded: dbC.downloaded_bytes || 0,
+        status: dbC.status,
+      };
+
+      // Use resume file data if it has more progress
+      const resumeC = resumeChunks.find(rc => rc.index === chunk.index);
+      if (resumeC && (resumeC.downloaded || 0) > chunk.downloaded) {
+        chunk.downloaded = resumeC.downloaded;
+        chunk.status = resumeC.status || chunk.status;
+      }
+
+      // Cross-reference with actual .part file size on disk
+      const chunkPath = this.resume.getChunkPath(downloadId, chunk.index);
+      try {
+        if (fs.existsSync(chunkPath)) {
+          const diskSize = fs.statSync(chunkPath).size;
+          const expectedSize = chunk.end - chunk.start + 1;
+          if (diskSize >= expectedSize) {
+            chunk.downloaded = expectedSize;
+            chunk.status = 'done';
+          } else if (diskSize > chunk.downloaded) {
+            chunk.downloaded = diskSize;
+          }
+        }
+      } catch {
+        // Use existing values
+      }
+
+      result.push(chunk);
+    }
+
+    return result;
+  }
+
+  /**
+   * Calculate per-worker speed limit (bytes/sec).
+   * Global limit is split evenly across active workers.
+   * @returns {number} 0 = unlimited
+   */
+  _getPerWorkerSpeedLimit(state) {
+    const globalLimit = parseInt(this.settings.speed_limit_global, 10) || 0;
+    if (globalLimit <= 0) return 0;
+    const activeWorkers = Math.max(state.workers.filter(w => w && !w.exited).length, 1);
+    return Math.floor(globalLimit / activeWorkers);
+  }
+
+  /**
+   * Flush all chunk downloaded bytes to DB and resume file.
+   * Called periodically during download and before pause.
+   */
+  _flushChunkState(state) {
+    for (const chunk of state.chunks) {
+      // Read actual file size on disk for accuracy
+      const chunkPath = this.resume.getChunkPath(state.id, chunk.index);
+      let actualDownloaded = chunk.downloaded;
+      try {
+        if (fs.existsSync(chunkPath)) {
+          actualDownloaded = fs.statSync(chunkPath).size;
+          chunk.downloaded = actualDownloaded;
+        }
+      } catch {
+        // Use in-memory value
+      }
+
+      // Update DB chunk record
+      const chunkRows = this.db.getChunks(state.id);
+      const dbChunk = chunkRows.find(c => c.chunk_index === chunk.index);
+      if (dbChunk) {
+        this.db.updateChunk(dbChunk.id, {
+          downloaded_bytes: actualDownloaded,
+          status: chunk.status,
+        });
+      }
+
+      // Update resume file
+      this.resume.updateChunkState(state.id, chunk.index, {
+        downloaded: actualDownloaded,
+        status: chunk.status,
+      });
+    }
   }
 
   // ─── Internal: Single Stream (fallback) ──────────────────────────

@@ -35,6 +35,7 @@ const {
   maxRetries = 3,
   chunkIndex,
   downloadId,
+  speedLimit = 0,
 } = workerData;
 
 /**
@@ -148,7 +149,39 @@ function downloadChunk(attempt, currentUrl) {
       let bytesWritten = existingBytes;
       const startBytes = bytesWritten;
 
-      res.on('data', (chunk) => {
+      // Token bucket for speed limiting (0 = unlimited)
+      let tokens = speedLimit > 0 ? speedLimit : Infinity;
+      let lastRefill = Date.now();
+      let paused = false;
+      const refillInterval = 100; // ms between refills
+
+      const throttledData = (chunk) => {
+        if (speedLimit > 0) {
+          const now = Date.now();
+          const elapsed = now - lastRefill;
+          if (elapsed >= refillInterval) {
+            tokens = Math.min(speedLimit, tokens + (speedLimit * elapsed / 1000));
+            lastRefill = now;
+          }
+
+          if (tokens <= 0) {
+            // Pause the response stream
+            if (!paused) {
+              paused = true;
+              res.pause();
+              const waitMs = Math.max(refillInterval, 50);
+              setTimeout(() => {
+                paused = false;
+                tokens = Math.min(speedLimit, tokens + (speedLimit * waitMs / 1000));
+                lastRefill = Date.now();
+                res.resume();
+              }, waitMs);
+            }
+            // Buffer this chunk anyway (it was already received)
+          }
+          tokens -= chunk.length;
+        }
+
         fileStream.write(chunk);
         bytesWritten += chunk.length;
 
@@ -157,7 +190,9 @@ function downloadChunk(attempt, currentUrl) {
           totalBytes: totalChunkSize,
           chunkBytes: chunk.length,
         });
-      });
+      };
+
+      res.on('data', throttledData);
 
       res.on('end', () => {
         fileStream.end(() => {
@@ -230,6 +265,8 @@ async function main() {
 }
 
 main().catch((err) => {
+  console.error(`[chunk-worker] Fatal error for chunk ${chunkIndex} (download ${downloadId}): ${err.message}`);
+  console.error(`[chunk-worker] Stack: ${err.stack}`);
   report('error', { message: `Worker fatal: ${err.message} (${err.stack})` });
   process.exit(1);
 });
