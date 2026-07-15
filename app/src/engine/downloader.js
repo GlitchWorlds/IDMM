@@ -979,6 +979,10 @@ class DownloadManager {
     const req = transport.request(reqOptions, (res) => {
       // Handle redirects
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        // W2: Destroy the original request before following the redirect to
+        // prevent late-firing 'error' or 'timeout' events on the old socket
+        // from racing with the new recursive request.
+        req.destroy();
         state.url = new URL(res.headers.location, state.url).href;
         this._doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject);
         return;

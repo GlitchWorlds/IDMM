@@ -273,12 +273,19 @@ class ResumeManager {
    * Call before pause/cancel/shutdown to avoid losing state.
    */
   flushPending() {
-    if (!this._pendingTimers) return;
+    // AW2: Re-entrancy guard — flushPending() can be called while a
+    // debounced saveState() callback is already running inside the same
+    // tick (e.g. via _flushChunkState → saveState).  Prevent infinite
+    // recursion by bailing out if we are already mid-flush.
+    if (this._flushing) return;
+    this._flushing = true;
+
+    if (!this._pendingTimers) { this._flushing = false; return; }
     for (const key of Object.keys(this._pendingTimers)) {
       clearTimeout(this._pendingTimers[key]);
       delete this._pendingTimers[key];
     }
-    if (!this._pendingUpdates) return;
+    if (!this._pendingUpdates) { this._flushing = false; return; }
     for (const [downloadId, pending] of Object.entries(this._pendingUpdates)) {
       if (!pending) continue;
       delete this._pendingUpdates[downloadId];
@@ -295,6 +302,7 @@ class ResumeManager {
 
       this.saveState(state);
     }
+    this._flushing = false;
   }
 }
 

@@ -478,7 +478,11 @@ class IDRAMServer {
 
       this._setupWebSocket();
 
-      // Wire up download manager callbacks to WebSocket broadcasts
+      // W7: Overwriting onComplete/onError is safe here — the DownloadManager
+      // constructor initialises both to no-ops (() => {}), so no prior handler
+      // is lost.  The replacements extend the original contract: they add
+      // WebSocket broadcast + active-URL cleanup on top of the base no-op,
+      // which is exactly what the server layer needs.
       this.downloader.onComplete = (downloadId, result) => {
         this._removeActiveUrl(downloadId);
         this.broadcast({
