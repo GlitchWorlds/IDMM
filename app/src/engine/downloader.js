@@ -219,10 +219,13 @@ class DownloadManager {
     if (!state) {
       // F4: Check DB status for a more specific message
       const dbDownload = this.db.getDownload(downloadId);
-      if (dbDownload && dbDownload.status === 'paused') {
+      if (!dbDownload) {
+        throw new Error('Download not found');
+      }
+      if (dbDownload.status === 'paused') {
         throw new Error('Download already paused');
       }
-      throw new Error('Download not active');
+      throw new Error('Download is not active');
     }
 
     state.status = 'pausing';
@@ -508,7 +511,12 @@ class DownloadManager {
         if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
           res.resume(); // R4: Drain response body to free socket before following redirect
           // R1: SSRF — validate redirect target before following
-          validateRedirect(res.headers.location, url);
+          try {
+            validateRedirect(res.headers.location, url);
+          } catch (ssrfErr) {
+            reject(ssrfErr);
+            return;
+          }
           const newUrl = new URL(res.headers.location, url).href;
           resolve(this._probeUrl(newUrl, headers, redirectCount + 1));
           return;

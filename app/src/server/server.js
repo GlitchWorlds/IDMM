@@ -213,6 +213,9 @@ class IDRAMServer {
           });
         }
 
+        // F10: Track active URL BEFORE startDownload to prevent race condition
+        this.activeUrls.add(url);
+
         const result = await this.downloader.startDownload({
           url,
           filename,
@@ -224,12 +227,12 @@ class IDRAMServer {
           checksum,
         });
 
-        // F10: Track active URL
-        this.activeUrls.add(url);
         this.downloadUrlMap.set(result.id, url);
 
         res.status(201).json(result);
       } catch (err) {
+        // F10: Remove URL from tracking on failure
+        this.activeUrls.delete(url);
         console.error('Download start error:', err.message);
         res.status(500).json({ error: sanitizeError(err) });
       }
