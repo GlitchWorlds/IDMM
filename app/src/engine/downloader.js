@@ -19,6 +19,27 @@ const { hashString } = require('../utils/hash');
  * Handles the full lifecycle: probe → split → download → merge → verify.
  */
 
+// F11: Global worker concurrency semaphore — max 128 total workers across all downloads
+const _globalWorkerSemaphore = {
+  current: 0,
+  max: 128,
+  queue: [],
+  acquire() {
+    if (this.current < this.max) {
+      this.current++;
+      return;
+    }
+    return new Promise(resolve => this.queue.push(resolve));
+  },
+  release() {
+    this.current--;
+    if (this.queue.length > 0) {
+      this.current++;
+      this.queue.shift()();
+    }
+  },
+};
+
 class DownloadManager {
   /**
    * @param {Object} options
@@ -151,6 +172,7 @@ class DownloadManager {
       cookies,
       referrer,
       headers: download.headers,
+      requestHeaders, // BUG FIX: Store for fallback to single-stream on noRangeSupport
       noRangeSupport: false,
       speedLimit: (parseInt(this.settings.speed_limit_global, 10) || 0) * 1024, // KB/s → bytes/s
     };
@@ -193,7 +215,14 @@ class DownloadManager {
    */
   pauseDownload(downloadId) {
     const state = this.active.get(downloadId);
-    if (!state) throw new Error('Download not active');
+    if (!state) {
+      // F4: Check DB status for a more specific message
+      const dbDownload = this.db.getDownload(downloadId);
+      if (dbDownload && dbDownload.status === 'paused') {
+        throw new Error('Download already paused');
+      }
+      throw new Error('Download not active');
+    }
 
     state.status = 'pausing';
 
@@ -234,6 +263,11 @@ class DownloadManager {
    * @returns {Promise<Object>}
    */
   async resumeDownload(downloadId) {
+    // F3: Guard against resuming an already-active download
+    if (this.active.has(downloadId)) {
+      throw new Error('Download already active');
+    }
+
     // Load state from DB
     const dbDownload = this.db.getDownloadWithChunks(downloadId);
     if (!dbDownload) throw new Error('Download not found');
@@ -273,6 +307,13 @@ class DownloadManager {
 
     this.active.set(downloadId, state);
     this.speedSamples.set(downloadId, []);
+
+    // F8: Cache chunk DB IDs for resume path
+    state.chunkDbIds = {};
+    const resumeDbChunks = this.db.getChunks(downloadId);
+    for (const dbc of resumeDbChunks) {
+      state.chunkDbIds[dbc.chunk_index] = dbc.id;
+    }
 
     this.db.updateDownload(downloadId, { status: 'downloading' });
 
@@ -527,6 +568,14 @@ class DownloadManager {
       start: c.start,
       end: c.end,
     })));
+
+    // F8: Cache chunk DB IDs to avoid repeated getChunks() calls on every progress update
+    state.chunkDbIds = {};
+    const dbChunks = this.db.getChunks(state.id);
+    for (const dbc of dbChunks) {
+      state.chunkDbIds[dbc.chunk_index] = dbc.id;
+    }
+
     this.resume.saveState(state);
 
     // Spawn workers
@@ -560,7 +609,7 @@ class DownloadManager {
       }
 
       chunk.status = 'downloading';
-      this._spawnWorker(state, chunk, chunkPath, opts);
+      this._spawnWorkerAsync(state, chunk, chunkPath, opts); // F11: async with global semaphore
     }
 
     // Check if all chunks are already done (resume edge case)
@@ -571,9 +620,18 @@ class DownloadManager {
   }
 
   /**
-   * Spawn a single worker thread for a chunk.
+   * Spawn a single worker thread for a chunk (async — waits for global semaphore).
+   * F11: Global worker concurrency cap (max 128 total).
    */
-  _spawnWorker(state, chunk, chunkPath, opts) {
+  async _spawnWorkerAsync(state, chunk, chunkPath, opts) {
+    await _globalWorkerSemaphore.acquire();
+
+    // Guard: download may have been paused/cancelled while waiting for semaphore
+    if (state.status === 'paused' || state.status === 'cancelled' || state.status === 'failed') {
+      _globalWorkerSemaphore.release();
+      return;
+    }
+
     const worker = new Worker(path.join(__dirname, 'chunk-worker.js'), {
       workerData: {
         url: state.url,
@@ -603,6 +661,8 @@ class DownloadManager {
     });
 
     worker.on('exit', (code) => {
+      _globalWorkerSemaphore.release(); // F11: Release global slot
+
       // Remove from workers list
       const idx = state.workers.indexOf(worker);
       if (idx !== -1) state.workers.splice(idx, 1);
@@ -650,11 +710,10 @@ class DownloadManager {
             downloaded: msg.downloaded,
             status: 'downloading',
           });
-          // Also update DB chunk record periodically for resume reliability
-          const chunkRows = this.db.getChunks(state.id);
-          const dbChunk = chunkRows.find(c => c.chunk_index === chunk.index);
-          if (dbChunk) {
-            this.db.updateChunk(dbChunk.id, {
+          // Also update DB chunk record periodically for resume reliability (F8: use cached DB IDs)
+          const cachedId = state.chunkDbIds ? state.chunkDbIds[chunk.index] : null;
+          if (cachedId) {
+            this.db.updateChunk(cachedId, {
               downloaded_bytes: msg.downloaded,
               status: 'downloading',
             });
@@ -667,11 +726,10 @@ class DownloadManager {
         chunk.downloaded = chunk.end - chunk.start + 1;
         this._recalcProgress(state);
 
-        // Update DB chunk
-        const chunkRows = this.db.getChunks(state.id);
-        const dbChunk = chunkRows.find(c => c.chunk_index === chunk.index);
-        if (dbChunk) {
-          this.db.updateChunk(dbChunk.id, {
+        // Update DB chunk (F8: use cached DB IDs)
+        const cachedIdDone = state.chunkDbIds ? state.chunkDbIds[chunk.index] : null;
+        if (cachedIdDone) {
+          this.db.updateChunk(cachedIdDone, {
             downloaded_bytes: chunk.downloaded,
             status: 'done',
           });
@@ -702,7 +760,7 @@ class DownloadManager {
           this._startSingleStreamDownload(state, {
             retryCount: this.settings.retry_count || 3,
             timeoutMs: this.settings.timeout_ms || 30000,
-            requestHeaders: {},
+            requestHeaders: state.requestHeaders || {},
           }).catch(err => {
             state.status = 'failed';
             state.error = err.message;
@@ -825,11 +883,10 @@ class DownloadManager {
         // Use in-memory value
       }
 
-      // Update DB chunk record
-      const chunkRows = this.db.getChunks(state.id);
-      const dbChunk = chunkRows.find(c => c.chunk_index === chunk.index);
-      if (dbChunk) {
-        this.db.updateChunk(dbChunk.id, {
+      // Update DB chunk record (F8: use cached DB IDs)
+      const flushCachedId = state.chunkDbIds ? state.chunkDbIds[chunk.index] : null;
+      if (flushCachedId) {
+        this.db.updateChunk(flushCachedId, {
           downloaded_bytes: actualDownloaded,
           status: chunk.status,
         });
@@ -841,6 +898,9 @@ class DownloadManager {
         status: chunk.status,
       });
     }
+
+    // F12: Flush any pending debounced resume file updates immediately
+    this.resume.flushPending();
   }
 
   // ─── Internal: Single Stream (fallback) ──────────────────────────
@@ -878,6 +938,16 @@ class DownloadManager {
           end: state.totalSize > 0 ? state.totalSize - 1 : 0,
         }]);
       }
+
+      // F8: Cache chunk DB ID for single-stream too
+      if (!state.chunkDbIds) {
+        state.chunkDbIds = {};
+        const dbChunks = this.db.getChunks(state.id);
+        for (const dbc of dbChunks) {
+          state.chunkDbIds[dbc.chunk_index] = dbc.id;
+        }
+      }
+
       this.resume.saveState(state);
 
       this._doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject);
@@ -885,6 +955,10 @@ class DownloadManager {
   }
 
   _doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject) {
+    let settled = false; // F2: Guard against double-settle (resolve after reject or vice versa)
+    const safeResolve = (...args) => { if (!settled) { settled = true; resolve(...args); } };
+    const safeReject = (...args) => { if (!settled) { settled = true; reject(...args); } };
+
     const parsed = new URL(state.url);
     const isHttps = parsed.protocol === 'https:';
     const transport = isHttps ? https : http;
@@ -910,7 +984,7 @@ class DownloadManager {
       }
 
       if (res.statusCode !== 200 && res.statusCode !== 206) {
-        reject(new Error(`HTTP ${res.statusCode} for single-stream download`));
+        safeReject(new Error(`HTTP ${res.statusCode} for single-stream download`));
         return;
       }
 
@@ -941,26 +1015,31 @@ class DownloadManager {
 
       res.on('end', () => {
         fileStream.end(() => {
+          // BUG FIX: Mark single-stream wrapper as exited
+          if (streamWrapper) streamWrapper.exited = true;
           state.chunks[0].status = 'done';
           this._finalizeDownload(state);
-          resolve();
+          safeResolve();
         });
       });
 
       res.on('error', (err) => {
+        // BUG FIX: Mark single-stream wrapper as exited
+        if (streamWrapper) streamWrapper.exited = true;
         fileStream.end();
-        reject(err);
+        safeReject(err);
       });
     });
 
-    state.workers.push({ terminate: () => req.destroy(), exited: false });
+    const streamWrapper = { terminate: () => req.destroy(), exited: false };
+    state.workers.push(streamWrapper);
 
     req.on('timeout', () => {
       req.destroy();
-      reject(new Error('Single-stream download timed out'));
+      safeReject(new Error('Single-stream download timed out'));
     });
 
-    req.on('error', reject);
+    req.on('error', safeReject);
     req.end();
   }
 
@@ -1037,12 +1116,16 @@ class DownloadManager {
       state.eta = Math.ceil(remaining / state.speed);
     }
 
-    // Persist to DB periodically
-    this.db.updateDownload(state.id, {
-      downloaded: totalDownloaded,
-      speed: state.speed,
-      eta: state.eta,
-    });
+    // Persist to DB periodically (throttled to max once per 500ms)
+    const now = Date.now();
+    if (!state._lastDbWrite || (now - state._lastDbWrite) >= 500) {
+      state._lastDbWrite = now;
+      this.db.updateDownload(state.id, {
+        downloaded: totalDownloaded,
+        speed: state.speed,
+        eta: state.eta,
+      });
+    }
 
     // Notify listeners
     this.onProgress(state.id, this._formatState(state));

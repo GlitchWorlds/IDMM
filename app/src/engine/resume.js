@@ -60,6 +60,13 @@ class ResumeManager {
    * @param {Object} state - Download state object
    */
   saveState(state) {
+    // F12: Cancel any pending debounced save for this download — direct save supersedes
+    if (this._pendingTimers && this._pendingTimers[state.id]) {
+      clearTimeout(this._pendingTimers[state.id]);
+      delete this._pendingTimers[state.id];
+      delete this._pendingUpdates[state.id];
+    }
+
     const dir = this.getDownloadTempDir(state.id);
     this._ensureDir(dir);
 
@@ -223,21 +230,71 @@ class ResumeManager {
 
   /**
    * Update a single chunk's state within the download.json.
+   * Debounced: at most one file write per 500ms per download (F12).
    * @param {string} downloadId
    * @param {number} chunkIndex
    * @param {Object} updates - { downloaded, status }
    */
   updateChunkState(downloadId, chunkIndex, updates) {
-    const state = this.loadState(downloadId);
-    if (!state || !state.chunks) return;
+    // F12: Accumulate pending updates in-memory and flush on a 500ms debounce
+    if (!this._pendingUpdates) this._pendingUpdates = {};
+    if (!this._pendingTimers) this._pendingTimers = {};
 
-    const chunk = state.chunks.find(c => c.index === chunkIndex);
-    if (!chunk) return;
+    const key = downloadId;
+    if (!this._pendingUpdates[key]) {
+      this._pendingUpdates[key] = {};
+    }
+    this._pendingUpdates[key][chunkIndex] = updates;
 
-    if (updates.downloaded !== undefined) chunk.downloaded = updates.downloaded;
-    if (updates.status !== undefined) chunk.status = updates.status;
+    if (!this._pendingTimers[key]) {
+      this._pendingTimers[key] = setTimeout(() => {
+        delete this._pendingTimers[key];
+        const pending = this._pendingUpdates[key];
+        if (!pending) return;
+        delete this._pendingUpdates[key];
 
-    this.saveState(state);
+        const state = this.loadState(downloadId);
+        if (!state || !state.chunks) return;
+
+        for (const [idx, upd] of Object.entries(pending)) {
+          const chunk = state.chunks.find(c => c.index === parseInt(idx, 10));
+          if (!chunk) continue;
+          if (upd.downloaded !== undefined) chunk.downloaded = upd.downloaded;
+          if (upd.status !== undefined) chunk.status = upd.status;
+        }
+
+        this.saveState(state);
+      }, 500);
+    }
+  }
+
+  /**
+   * Flush all pending debounced updates immediately.
+   * Call before pause/cancel/shutdown to avoid losing state.
+   */
+  flushPending() {
+    if (!this._pendingTimers) return;
+    for (const key of Object.keys(this._pendingTimers)) {
+      clearTimeout(this._pendingTimers[key]);
+      delete this._pendingTimers[key];
+    }
+    if (!this._pendingUpdates) return;
+    for (const [downloadId, pending] of Object.entries(this._pendingUpdates)) {
+      if (!pending) continue;
+      delete this._pendingUpdates[downloadId];
+
+      const state = this.loadState(downloadId);
+      if (!state || !state.chunks) continue;
+
+      for (const [idx, upd] of Object.entries(pending)) {
+        const chunk = state.chunks.find(c => c.index === parseInt(idx, 10));
+        if (!chunk) continue;
+        if (upd.downloaded !== undefined) chunk.downloaded = upd.downloaded;
+        if (upd.status !== undefined) chunk.status = upd.status;
+      }
+
+      this.saveState(state);
+    }
   }
 }
 

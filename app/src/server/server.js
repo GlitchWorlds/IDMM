@@ -34,6 +34,10 @@ class IDRAMServer {
     this.wss = null;
     this.wsClients = new Set();
     this.broadcastTimer = null;
+    this._heartbeatTimer = null;
+    this.activeUrls = new Set(); // F10: Track URLs currently being downloaded
+    this.downloadUrlMap = new Map(); // F10: downloadId → url for cleanup
+    this._rateLimitCleanupTimer = null;
 
     this._setupMiddleware();
     this._setupRoutes();
@@ -105,6 +109,16 @@ class IDRAMServer {
 
       next();
     });
+
+    // F9: TTL-based eviction — clean up stale rate limit entries every 5 minutes
+    this._rateLimitCleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [ip, entry] of rateLimitMap) {
+        if (now - entry.windowStart > RATE_WINDOW) {
+          rateLimitMap.delete(ip);
+        }
+      }
+    }, 5 * 60 * 1000);
   }
 
   // ─── Routes ──────────────────────────────────────────────────────
@@ -131,6 +145,31 @@ class IDRAMServer {
           return res.status(400).json({ error: 'Invalid URL' });
         }
 
+        // F1: Path traversal protection — validate save_to against allowed roots
+        {
+          const defaultSavePath = this.db.getSetting('default_save_path') || '';
+          const allowedRoots = new Set();
+          if (defaultSavePath) allowedRoots.add(path.resolve(defaultSavePath));
+          try {
+            allowedRoots.add(path.resolve(require('node:os').homedir(), 'Downloads'));
+          } catch { /* OS module unavailable — rely on default_save_path only */ }
+
+          if (allowedRoots.size > 0) {
+            const resolvedSaveTo = path.resolve(save_to || defaultSavePath);
+            const isAllowed = [...allowedRoots].some(
+              root => resolvedSaveTo === root || resolvedSaveTo.startsWith(root + path.sep)
+            );
+            if (!isAllowed) {
+              return res.status(403).json({ error: 'Save path not allowed' });
+            }
+          }
+        }
+
+        // F10: Duplicate download URL check
+        if (this.activeUrls.has(url)) {
+          return res.status(409).json({ error: 'URL is already being downloaded' });
+        }
+
         // Check concurrent download limit
         const maxConcurrent = parseInt(this.db.getSetting('max_concurrent_downloads') || '5', 10);
         if (this.downloader.getActiveCount() >= maxConcurrent) {
@@ -149,6 +188,10 @@ class IDRAMServer {
           headers,
           checksum,
         });
+
+        // F10: Track active URL
+        this.activeUrls.add(url);
+        this.downloadUrlMap.set(result.id, url);
 
         res.status(201).json(result);
       } catch (err) {
@@ -234,6 +277,7 @@ class IDRAMServer {
     this.app.post('/api/download/:id/cancel', (req, res) => {
       try {
         const result = this.downloader.cancelDownload(req.params.id);
+        this._removeActiveUrl(req.params.id); // F10: Cleanup URL tracking
         res.json(result);
       } catch (err) {
         res.status(500).json({ error: err.message });
@@ -244,6 +288,7 @@ class IDRAMServer {
     this.app.delete('/api/download/:id', (req, res) => {
       try {
         const result = this.downloader.deleteDownload(req.params.id);
+        this._removeActiveUrl(req.params.id); // F10: Cleanup URL tracking
         res.json(result);
       } catch (err) {
         res.status(500).json({ error: err.message });
@@ -307,7 +352,21 @@ class IDRAMServer {
   // ─── WebSocket ───────────────────────────────────────────────────
 
   _setupWebSocket() {
-    this.wss = new WebSocketServer({ server: this.server, path: '/ws' });
+    // F6: Set maxPayload to prevent memory abuse from huge messages
+    this.wss = new WebSocketServer({ server: this.server, path: '/ws', maxPayload: 64 * 1024 });
+
+    // F7: Heartbeat — terminate dead connections every 30s
+    this._heartbeatTimer = setInterval(() => {
+      for (const ws of this.wsClients) {
+        if (ws.isAlive === false) {
+          this.wsClients.delete(ws);
+          ws.terminate();
+          continue;
+        }
+        ws.isAlive = false;
+        ws.ping();
+      }
+    }, 30000);
 
     this.wss.on('connection', (ws, req) => {
       // Verify origin
@@ -316,6 +375,9 @@ class IDRAMServer {
         ws.close(4003, 'Origin not allowed');
         return;
       }
+
+      ws.isAlive = true; // F7: Mark alive on connect
+      ws.on('pong', () => { ws.isAlive = true; }); // F7: Refresh on pong
 
       this.wsClients.add(ws);
       debugLog(`[WS] Client connected (total: ${this.wsClients.size})`);
@@ -365,6 +427,18 @@ class IDRAMServer {
     }, WS_BROADCAST_INTERVAL);
   }
 
+  /**
+   * Remove a download's URL from the active tracking set.
+   * @param {string} downloadId
+   */
+  _removeActiveUrl(downloadId) {
+    const url = this.downloadUrlMap.get(downloadId);
+    if (url) {
+      this.activeUrls.delete(url);
+      this.downloadUrlMap.delete(downloadId);
+    }
+  }
+
   _isAllowedOrigin(origin) {
     return (
       origin.startsWith('http://localhost:') ||
@@ -406,6 +480,7 @@ class IDRAMServer {
 
       // Wire up download manager callbacks to WebSocket broadcasts
       this.downloader.onComplete = (downloadId, result) => {
+        this._removeActiveUrl(downloadId);
         this.broadcast({
           type: 'completed',
           download_id: downloadId,
@@ -414,6 +489,7 @@ class IDRAMServer {
       };
 
       this.downloader.onError = (downloadId, error) => {
+        this._removeActiveUrl(downloadId);
         this.broadcast({
           type: 'error',
           download_id: downloadId,
@@ -441,10 +517,25 @@ class IDRAMServer {
    * @returns {Promise<void>}
    */
   stop() {
-    return new Promise((resolve) => {
+    // BUG FIX: Guard against double-call — return same promise if already stopping
+    if (this._stopping) {
+      return this._stopping;
+    }
+
+    this._stopping = new Promise((resolve) => {
       if (this.broadcastTimer) {
         clearInterval(this.broadcastTimer);
         this.broadcastTimer = null;
+      }
+
+      if (this._heartbeatTimer) {
+        clearInterval(this._heartbeatTimer);
+        this._heartbeatTimer = null;
+      }
+
+      if (this._rateLimitCleanupTimer) {
+        clearInterval(this._rateLimitCleanupTimer);
+        this._rateLimitCleanupTimer = null;
       }
 
       // Close all WebSocket connections
@@ -459,6 +550,7 @@ class IDRAMServer {
 
       if (this.server) {
         this.server.close(() => {
+          this.server = null;
           debugLog('[IDMAM] Server stopped');
           resolve();
         });
@@ -466,6 +558,8 @@ class IDRAMServer {
         resolve();
       }
     });
+
+    return this._stopping;
   }
 }
 

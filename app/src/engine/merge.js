@@ -21,20 +21,30 @@ const path = require('node:path');
  */
 function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
   return new Promise((resolve, reject) => {
-    // Ensure output directory exists
+    // F13: Atomic write — write to temp file first, rename on completion
     const outDir = path.dirname(outputPath);
     if (!fs.existsSync(outDir)) {
       fs.mkdirSync(outDir, { recursive: true });
     }
 
-    const outputStream = fs.createWriteStream(outputPath);
+    const tempPath = outputPath + '.part';
+
+    const outputStream = fs.createWriteStream(tempPath);
     let bytesWritten = 0;
     let chunkIndex = 0;
 
     function writeNextChunk() {
       if (chunkIndex >= chunkPaths.length) {
         outputStream.end(() => {
-          resolve();
+          // F13: Atomic rename — on the same filesystem this is guaranteed atomic
+          try {
+            fs.renameSync(tempPath, outputPath);
+            resolve();
+          } catch (err) {
+            // Clean up temp file on rename failure
+            try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
+            reject(new Error(`Failed to rename temp file: ${err.message}`));
+          }
         });
         return;
       }
@@ -43,7 +53,9 @@ function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
       chunkIndex++;
 
       if (!fs.existsSync(chunkPath)) {
-        // Missing chunk — skip with zero fill? Or error?
+        outputStream.destroy();
+        // Clean up temp file
+        try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
         reject(new Error(`Missing chunk file: ${chunkPath}`));
         return;
       }
@@ -63,11 +75,17 @@ function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
       });
 
       inputStream.on('error', (err) => {
+        outputStream.destroy();
+        // Clean up temp file
+        try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
         reject(new Error(`Error reading chunk ${chunkPath}: ${err.message}`));
       });
     }
 
     outputStream.on('error', (err) => {
+      outputStream.destroy();
+      // Clean up temp file
+      try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
       reject(new Error(`Error writing output: ${err.message}`));
     });
 

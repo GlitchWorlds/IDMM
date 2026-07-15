@@ -146,6 +146,9 @@ function downloadChunk(attempt, currentUrl) {
 
       // Open file for append (resume-aware)
       const fileStream = fs.createWriteStream(filePath, { flags: 'a' });
+
+      // BUG FIX: Handle write stream errors (disk full, permissions, etc.)
+      fileStream.on('error', reject);
       let bytesWritten = existingBytes;
       const startBytes = bytesWritten;
 
