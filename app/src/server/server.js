@@ -20,6 +20,30 @@ const WS_BROADCAST_INTERVAL = 500; // ms
 const DEBUG = process.env.IDMAM_DEBUG === '1' || process.env.DEBUG === 'idmam';
 const debugLog = DEBUG ? console.log.bind(console) : () => {};
 
+/**
+ * Sanitize error messages for external responses.
+ * Known safe errors pass through; unknown errors get generic message.
+ * Prevents leaking internal file paths or system details.
+ */
+const SAFE_ERROR_PATTERNS = [
+  /^Download not found$/i,
+  /^Download already (active|paused)$/i,
+  /^Download is not (active|paused)$/i,
+  /^URL already being downloaded$/i,
+  /^Invalid URL$/i,
+  /^No file provided$/i,
+  /^Invalid setting/i,
+  /^save_to path not allowed$/i,
+  /^Cannot delete active download$/i,
+  /^Concurrent download limit reached/i,
+];
+function sanitizeError(err) {
+  const msg = err.message || 'Unknown error';
+  if (SAFE_ERROR_PATTERNS.some(re => re.test(msg))) return msg;
+  console.error('[INTERNAL]', msg);
+  return 'Internal server error';
+}
+
 class IDRAMServer {
   /**
    * @param {Object} options
@@ -139,10 +163,21 @@ class IDRAMServer {
         }
 
         // Validate URL
+        let parsedUrl;
         try {
-          new URL(url);
+          parsedUrl = new URL(url);
         } catch {
           return res.status(400).json({ error: 'Invalid URL' });
+        }
+
+        // SSRF protection — block localhost/private IPs (skip in test mode)
+        const isTestMode = process.env.IDMAM_TEST === '1' || process.env.NODE_ENV === 'test';
+        if (!isTestMode) {
+          const hostname = parsedUrl.hostname.toLowerCase();
+          const BLOCKED_HOSTS = ['127.0.0.1', 'localhost', '0.0.0.0', '::1', '[::1]'];
+          if (BLOCKED_HOSTS.includes(hostname) || hostname.startsWith('192.168.') || hostname.startsWith('10.') || /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname)) {
+            return res.status(400).json({ error: 'Cannot download from localhost or private network' });
+          }
         }
 
         // F1: Path traversal protection — validate save_to against allowed roots
@@ -196,7 +231,7 @@ class IDRAMServer {
         res.status(201).json(result);
       } catch (err) {
         console.error('Download start error:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
 
@@ -234,7 +269,7 @@ class IDRAMServer {
 
         res.json(enriched);
       } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
 
@@ -247,7 +282,7 @@ class IDRAMServer {
         }
         res.json(state);
       } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
 
@@ -258,7 +293,7 @@ class IDRAMServer {
         res.json(result);
       } catch (err) {
         const status = err.message.includes('not active') ? 400 : 500;
-        res.status(status).json({ error: err.message });
+        res.status(status).json({ error: sanitizeError(err) });
       }
     });
 
@@ -269,7 +304,7 @@ class IDRAMServer {
         res.json(result);
       } catch (err) {
         const status = err.message.includes('not found') ? 404 : 500;
-        res.status(status).json({ error: err.message });
+        res.status(status).json({ error: sanitizeError(err) });
       }
     });
 
@@ -280,7 +315,7 @@ class IDRAMServer {
         this._removeActiveUrl(req.params.id); // F10: Cleanup URL tracking
         res.json(result);
       } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
 
@@ -291,7 +326,7 @@ class IDRAMServer {
         this._removeActiveUrl(req.params.id); // F10: Cleanup URL tracking
         res.json(result);
       } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
 
@@ -301,7 +336,7 @@ class IDRAMServer {
         const settings = this.db.getAllSettings();
         res.json(settings);
       } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
 
@@ -334,7 +369,7 @@ class IDRAMServer {
 
         res.json({ updated: Object.keys(filtered) });
       } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
 
@@ -344,7 +379,7 @@ class IDRAMServer {
         const stats = this.db.getStats();
         res.json(stats);
       } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: sanitizeError(err) });
       }
     });
   }
@@ -497,7 +532,7 @@ class IDRAMServer {
         this.broadcast({
           type: 'error',
           download_id: downloadId,
-          error: error.message,
+          error: sanitizeError(error),
         });
       };
 

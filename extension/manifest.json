@@ -51,6 +51,6 @@
   "minimum_chrome_version": "109",
 
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src http://127.0.0.1:* ws://127.0.0.1:*; img-src 'self' data:"
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src http://127.0.0.1:9977 ws://127.0.0.1:9977; img-src 'self' data:"
   }
 }

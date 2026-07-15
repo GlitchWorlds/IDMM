@@ -191,6 +191,7 @@ async function runTests() {
 
   const IDMAMDatabase = require('./src/db/sqlite');
   const DownloadManager = require('./src/engine/downloader');
+  process.env.IDMAM_TEST = '1'; // Enable test mode (allows localhost downloads)
   const IDRAMServer = require('./src/server/server');
 
   // Create temp directories
