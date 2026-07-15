@@ -10,24 +10,16 @@
   <div class="container">
     <header class="page-header">
       <h1>⚡ IDMAM Settings</h1>
-      <p class="subtitle">Configure download interception and server connection</p>
+      <p class="subtitle">Configure download interception</p>
     </header>
 
-    <!-- Server connection -->
+    <!-- IDMAM Status -->
     <section class="section">
-      <h2 class="section-title">🔗 Server Connection</h2>
+      <h2 class="section-title">📡 IDMAM Status</h2>
       <div class="setting-row">
-        <label for="server-url">IDMAM Server URL</label>
-        <div class="setting-control">
-          <input type="text" id="server-url" value="http://127.0.0.1:9977" placeholder="http://127.0.0.1:9977">
-          <span class="setting-hint">Default: http://127.0.0.1:9977</span>
-        </div>
-      </div>
-      <div class="setting-row">
-        <label>Server Status</label>
+        <label>Status</label>
         <div class="setting-control">
           <span id="server-status" class="status-indicator">Checking...</span>
-          <button id="btn-test-connection" class="btn btn-secondary">Test Connection</button>
         </div>
       </div>
     </section>

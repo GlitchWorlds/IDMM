@@ -5,13 +5,12 @@
  *
  * Uses IDMAM_API from lib/api-client.js for settings persistence.
  * Settings are stored under the 'idmam_settings' key in chrome.storage.local.
+ * Backend URL is hidden from users — only shows Connected/Not Running.
  */
 
 // ─── DOM references ────────────────────────────────────────────────
 
-const $serverUrl = document.getElementById('server-url');
 const $serverStatus = document.getElementById('server-status');
-const $btnTestConnection = document.getElementById('btn-test-connection');
 const $extEnabled = document.getElementById('ext-enabled');
 const $maxThreads = document.getElementById('max-threads');
 const $defaultSavePath = document.getElementById('default-save-path');
@@ -43,7 +42,7 @@ const CATEGORY_KEY_MAP = {
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   await loadSettings();
-  testConnection();
+  checkStatus();
 });
 
 // ─── Event listeners ───────────────────────────────────────────────
@@ -51,11 +50,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupEventListeners() {
   $btnSave.addEventListener('click', saveSettings);
   $btnReset.addEventListener('click', resetSettings);
-  $btnTestConnection.addEventListener('click', testConnection);
-
-  $serverUrl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') testConnection();
-  });
 }
 
 // ─── Load settings from storage ────────────────────────────────────
@@ -63,7 +57,6 @@ function setupEventListeners() {
 async function loadSettings() {
   const settings = await IDMAM_API.getSettings();
 
-  $serverUrl.value = settings.serverUrl || 'http://127.0.0.1:9977';
   $extEnabled.checked = settings.enabled !== false;
   $maxThreads.value = settings.maxThreads || 8;
   $defaultSavePath.value = settings.defaultSavePath || '';
@@ -82,7 +75,6 @@ async function loadSettings() {
 
 async function saveSettings() {
   const settings = {
-    serverUrl: $serverUrl.value.trim().replace(/\/+$/, '') || 'http://127.0.0.1:9977',
     enabled: $extEnabled.checked,
     maxThreads: clamp(parseInt($maxThreads.value, 10) || 8, 1, 64),
     defaultSavePath: $defaultSavePath.value.trim(),
@@ -97,9 +89,6 @@ async function saveSettings() {
   }
 
   await IDMAM_API.saveSettings(settings);
-
-  // Update API client's cached server URL
-  await IDMAM_API.refreshServerUrl();
 
   // Notify background to reload settings
   try {
@@ -129,35 +118,23 @@ async function resetSettings() {
   showSaveStatus('Settings reset to defaults', false);
 }
 
-// ─── Connection test ───────────────────────────────────────────────
+// ─── Server status check (no URL exposed) ──────────────────────────
 
-async function testConnection() {
+async function checkStatus() {
   $serverStatus.textContent = 'Checking...';
   $serverStatus.className = 'status-indicator checking';
 
-  const url = $serverUrl.value.trim().replace(/\/+$/, '') || 'http://127.0.0.1:9977';
-
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-
-    const response = await fetch(`${url}/api/health`, { signal: controller.signal });
-    clearTimeout(timeout);
-
-    if (response.ok) {
-      const data = await response.json();
-      $serverStatus.textContent = `Online (v${data.version || '?'})`;
+    const ok = await IDMAM_API.healthCheck();
+    if (ok) {
+      $serverStatus.textContent = 'Connected \u2713';
       $serverStatus.className = 'status-indicator online';
     } else {
-      $serverStatus.textContent = `Error (${response.status})`;
+      $serverStatus.textContent = 'Not Running \u2717';
       $serverStatus.className = 'status-indicator offline';
     }
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      $serverStatus.textContent = 'Timeout';
-    } else {
-      $serverStatus.textContent = 'Offline';
-    }
+  } catch {
+    $serverStatus.textContent = 'Not Running \u2717';
     $serverStatus.className = 'status-indicator offline';
   }
 }

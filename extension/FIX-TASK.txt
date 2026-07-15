@@ -1,0 +1,20 @@
+Update IDMAM Chrome extension to hide backend details from users. Files at D:\IDMAM\extension\.
+
+Changes needed:
+
+1. options/options.html:
+- REMOVE the entire Server Connection section (server-url input, test-connection button, server status with URL)
+- REPLACE with a simple status section: just show IDMAM Status: Connected or IDMAM Status: Not Running (no URL visible)
+- Keep all other sections (Extension toggle, Auto-Intercept Rules, Download Defaults)
+
+2. options/options.js:
+- REMOVE serverUrl from settings load/save
+- REMOVE server URL input handling
+- KEEP: auto-check server status on page load, show connected/not running
+- Status check should use IDMAM_API.healthCheck() from api-client.js
+
+3. lib/api-client.js:
+- KEEP the hardcoded BASE_URL (this is internal, users dont see it)
+- No changes needed here
+
+Goal: users should never see 127.0.0.1:9977 or any backend URL. They only see Connected or Not Running.
