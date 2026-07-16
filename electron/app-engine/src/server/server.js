@@ -390,37 +390,6 @@ class IDRAMServer {
       }
     });
 
-    // POST /api/open-folder — Open file location in system file explorer
-    this.app.post('/api/open-folder', (req, res) => {
-      try {
-        const { path: filePath } = req.body;
-        if (!filePath) {
-          return res.status(400).json({ error: 'path is required' });
-        }
-
-        const { execSync } = require('node:child_process');
-
-        // On Windows: use explorer.exe /select to highlight the file
-        // On macOS: use open -R
-        // On Linux: use xdg-open on the parent directory
-        const platform = process.platform;
-        if (platform === 'win32') {
-          // explorer /select opens folder and highlights the file
-          execSync(`explorer /select,"${filePath}"`, { timeout: 5000 });
-        } else if (platform === 'darwin') {
-          execSync(`open -R "${filePath}"`, { timeout: 5000 });
-        } else {
-          const dir = require('node:path').dirname(filePath);
-          execSync(`xdg-open "${dir}"`, { timeout: 5000 });
-        }
-
-        res.json({ ok: true });
-      } catch (err) {
-        // Don't leak internal errors to client
-        res.status(500).json({ error: 'Failed to open folder' });
-      }
-    });
-
     // GET /api/stats — Download statistics
     this.app.get('/api/stats', (req, res) => {
       try {

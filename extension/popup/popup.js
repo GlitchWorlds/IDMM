@@ -83,6 +83,11 @@ function setupEventListeners() {
     if (message.type === 'SETTINGS_UPDATED') {
       loadSavePathHint();
     }
+
+    // Settings sync from server (desktop app or other extension instance)
+    if (message.type === 'SETTINGS_CHANGED') {
+      loadSavePathHint();
+    }
   });
 }
 
@@ -337,9 +342,8 @@ async function handleAction(action, id, data = {}) {
         await IDMAM_API.deleteDownload(id);
         break;
       case 'open-folder':
-        await copyToClipboard(data.path);
-        // E6: Show prominent toast instead of small tooltip
-        showToast('Path copied! Paste in Explorer address bar (Win+R)');
+        await IDMAM_API.openFolder(data.path);
+        showToast('Opening folder in Explorer...');
         return; // No refresh needed
     }
     await refreshDownloads();

@@ -80,6 +80,13 @@ const IDMAM_API = {
     return IDMAM_API._fetch('/api/stats');
   },
 
+  async openFolder(filePath) {
+    return IDMAM_API._fetch('/api/open-folder', {
+      method: 'POST',
+      body: JSON.stringify({ path: filePath }),
+    });
+  },
+
   async healthCheck() {
     try {
       const baseUrl = IDMAM_API.BASE_URL;
