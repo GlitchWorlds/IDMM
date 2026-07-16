@@ -9,36 +9,8 @@
   Pop $1 ; stdout
   Sleep 1000
 
-  ; === Detect existing installation ===
-  StrCpy $R0 "0" ; flag: 0 = no prior install, 1 = prior install detected
-
-  ; Check 1: auto-start registry entry
-  ReadRegStr $R1 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "IDMAM"
-  StrCmp $R1 "" +2 0
-    StrCpy $R0 "1"
-
-  ; Check 2: existing executable in install dir
-  IfFileExists "$INSTDIR\IDMAM.exe" 0 +2
-    StrCpy $R0 "1"
-
-  ; === If existing install found, ask upgrade or clean install ===
-  StrCmp $R0 "0" doneUpgradeCheck 0
-    MessageBox MB_YESNO|MB_ICONQUESTION \
-      "IDMAM is already installed.$\r$\n$\r$\n\
-      YES = Upgrade (preserve your downloads and settings)$\r$\n\
-      NO  = Clean install (delete all existing data)" \
-      IDYES doUpgrade IDNO doCleanInstall
-
-  doUpgrade:
-    ; Upgrade: install over existing, preserve %USERPROFILE%\.idmam
-    Goto doneUpgradeCheck
-
-  doCleanInstall:
-    ; Clean install: delete all user data before installing
-    RMDir /r "$PROFILE\.idmam"
-    Goto doneUpgradeCheck
-
-  doneUpgradeCheck:
+  ; === Always upgrade: install over existing, preserve user data ===
+  ; No dialog — just install. User data (%USERPROFILE%\.idmam) is always preserved.
 
   ; === Auto-start IDMAM on Windows boot ===
   ; Write to HKCU so it works without admin elevation
@@ -104,21 +76,7 @@
   ; === Remove launch helper ===
   Delete "$INSTDIR\launch-chrome.bat"
 
-  ; === Offer to remove user data ===
-  MessageBox MB_YESNO|MB_ICONQUESTION \
-    "Do you want to remove download history and settings?$\r$\n$\r$\n\
-    YES = Delete all user data ($PROFILE\.idmam)$\r$\n\
-    NO  = Keep your data for a future reinstall" \
-    IDYES removeUserData IDNO keepUserData
-
-  removeUserData:
-    RMDir /r "$PROFILE\.idmam"
-    Goto doneUserData
-
-  keepUserData:
-    ; User data preserved at %USERPROFILE%\.idmam
-    Goto doneUserData
-
-  doneUserData:
+  ; === Always remove user data (full uninstall) ===
+  RMDir /r "$PROFILE\.idmam"
 
 !macroend
