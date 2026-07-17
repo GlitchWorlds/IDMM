@@ -231,6 +231,9 @@ class IDMMServer {
 
         this.downloadUrlMap.set(result.id, url);
 
+        // Broadcast new download to desktop UI
+        this.broadcast({ type: 'added', id: result.id, data: result });
+
         res.status(201).json(result);
       } catch (err) {
         // F10: Remove URL from tracking on failure
@@ -295,6 +298,7 @@ class IDMMServer {
     this.app.post('/api/download/:id/pause', (req, res) => {
       try {
         const result = this.downloader.pauseDownload(req.params.id);
+        this.broadcast({ type: 'status', id: req.params.id, status: 'paused' });
         res.json(result);
       } catch (err) {
         const status = err.message.includes('not found') ? 404
@@ -308,6 +312,7 @@ class IDMMServer {
     this.app.post('/api/download/:id/resume', async (req, res) => {
       try {
         const result = await this.downloader.resumeDownload(req.params.id);
+        this.broadcast({ type: 'status', id: req.params.id, status: 'downloading' });
         res.json(result);
       } catch (err) {
         const status = err.message.includes('not found') ? 404 : 500;
@@ -319,7 +324,8 @@ class IDMMServer {
     this.app.post('/api/download/:id/cancel', (req, res) => {
       try {
         const result = this.downloader.cancelDownload(req.params.id);
-        this._removeActiveUrl(req.params.id); // F10: Cleanup URL tracking
+        this._removeActiveUrl(req.params.id);
+        this.broadcast({ type: 'status', id: req.params.id, status: 'failed' });
         res.json(result);
       } catch (err) {
         res.status(500).json({ error: sanitizeError(err) });
@@ -330,7 +336,8 @@ class IDMMServer {
     this.app.delete('/api/download/:id', (req, res) => {
       try {
         const result = this.downloader.deleteDownload(req.params.id);
-        this._removeActiveUrl(req.params.id); // F10: Cleanup URL tracking
+        this._removeActiveUrl(req.params.id);
+        this.broadcast({ type: 'removed', id: req.params.id });
         res.json(result);
       } catch (err) {
         res.status(500).json({ error: sanitizeError(err) });
@@ -498,19 +505,21 @@ class IDMMServer {
       const states = this.downloader.getActiveStates();
       if (states.length === 0) return;
 
-      const message = JSON.stringify({
-        type: 'progress',
-        downloads: states,
-        timestamp: Date.now(),
-      });
+      // Send individual progress per download (matches desktop UI format)
+      for (const state of states) {
+        const message = JSON.stringify({
+          type: 'progress',
+          id: state.id,
+          data: state,
+        });
 
-      for (const client of this.wsClients) {
-        if (client.readyState === 1) { // WebSocket.OPEN
-          try {
-            client.send(message);
-          } catch {
-            // Client disconnected
-            this.wsClients.delete(client);
+        for (const client of this.wsClients) {
+          if (client.readyState === 1) {
+            try {
+              client.send(message);
+            } catch {
+              this.wsClients.delete(client);
+            }
           }
         }
       }

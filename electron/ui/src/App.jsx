@@ -48,8 +48,9 @@ export default function App() {
     getDownloads().then(setDownloads).catch(console.error);
     getStats().then(setStats).catch(console.error);
     const interval = setInterval(() => {
+      getDownloads().then(setDownloads).catch(() => {});
       getStats().then(setStats).catch(() => {});
-    }, 5000);
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 

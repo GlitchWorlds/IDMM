@@ -118,6 +118,14 @@ async function main() {
 
   // 5. Start API server
   const server = new IDMMServer({ db, downloader });
+
+  // Wire up completion broadcast
+  const origOnComplete = downloader.onComplete;
+  downloader.onComplete = (downloadId, result) => {
+    origOnComplete(downloadId, result);
+    server.broadcast({ type: 'status', id: downloadId, status: 'completed' });
+  };
+
   await server.start();
 
   console.log('');
