@@ -157,7 +157,7 @@ class IDRAMServer {
     this.app.post('/api/download', async (req, res) => {
       const url = req.body && req.body.url; // F10: Extract URL early for catch block
       try {
-        const { filename, save_to, threads, cookies, referrer, headers, checksum } = req.body;
+        const { filename, save_to, threads, thread_mode, cookies, referrer, headers, checksum } = req.body;
 
         if (!url) {
           return res.status(400).json({ error: 'URL is required' });
@@ -222,6 +222,7 @@ class IDRAMServer {
           filename,
           saveTo: save_to,
           threads,
+          threadMode: thread_mode,
           cookies,
           referrer,
           headers,
@@ -356,7 +357,7 @@ class IDRAMServer {
 
         // Whitelist allowed settings keys
         const allowedKeys = [
-          'default_threads', 'max_concurrent_downloads', 'max_threads_per_download',
+          'default_threads', 'default_thread_mode', 'max_concurrent_downloads', 'max_threads_per_download',
           'default_save_path', 'temp_dir', 'retry_count', 'timeout_ms',
           'speed_limit_global', 'auto_resume', 'auto_categorize',
           // Extension sync: intercept rules

@@ -147,6 +147,17 @@ function downloadChunk(attempt, currentUrl, redirectCount = 0) {
         return;
       }
 
+      // 429 Too Many Requests — report as throttle so parent can reduce threads
+      if (res.statusCode === 429) {
+        res.resume(); // Drain response body
+        const retryAfter = parseInt(res.headers['retry-after'], 10) || 0;
+        const err = new Error(`HTTP 429 Too Many Requests for chunk ${chunkIndex}`);
+        err.isThrottle = true;
+        err.retryAfter = retryAfter;
+        reject(err);
+        return;
+      }
+
       // Expect 206 Partial Content
       if (res.statusCode !== 206) {
         reject(new Error(`Unexpected HTTP ${res.statusCode} for chunk ${chunkIndex}`));
@@ -230,6 +241,10 @@ function downloadChunk(attempt, currentUrl, redirectCount = 0) {
     });
 
     req.on('error', (err) => {
+      // Mark ECONNRESET as throttle so parent can reduce thread count
+      if (err.code === 'ECONNRESET') {
+        err.isThrottle = true;
+      }
       reject(err);
     });
 
@@ -258,6 +273,15 @@ async function main() {
         // R5: Allow final postMessage to flush before exiting
         setTimeout(() => process.exit(1), 100);
         return;
+      }
+
+      // Report throttle events so parent can reduce thread count
+      if (err.isThrottle) {
+        report('throttle', {
+          error: err.message,
+          code: err.code || null,
+          retryAfter: err.retryAfter || 0,
+        });
       }
 
       if (attempt < maxRetries) {

@@ -48,7 +48,7 @@ Chrome Extension                    Node.js Server
 | 113 | Rate limiter middleware | Per-IP sliding window (100 req/60s) |
 | 140 | Rate limit cleanup interval | Evict stale entries every 5 min |
 | 150 | `_setupRoutes()` | All REST API routes |
-| 161 | `POST /api/download` | Start new download (SSRF check, path traversal guard) |
+| 161 | `POST /api/download` | Start new download (SSRF check, path traversal guard). Accepts `thread_mode: "auto"` | "manual"` |
 | 217 | `GET /api/downloads` | List all downloads (optional status filter) |
 | 234 | `GET /api/download/:id` | Get download details |
 | 247 | `POST /api/download/:id/pause` | Pause download |
@@ -57,7 +57,7 @@ Chrome Extension                    Node.js Server
 | 296 | `DELETE /api/download/:id` | Delete download + files |
 | 312 | `GET /api/stats` | Server statistics |
 | 327 | `GET /api/settings` | Get all settings |
-| 333 | `PUT /api/settings` | Update settings (whitelist: 10 keys) |
+| 333 | `PUT /api/settings` | Update settings (whitelist: 12 keys incl. `default_thread_mode`) |
 | 370 | `GET /api/health` | Health check |
 | 389 | `_setupWebSocket()` | WebSocket server on `/ws` |
 | 395 | `_heartbeat()` | WS ping/pong 30s keepalive |
@@ -93,7 +93,7 @@ Chrome Extension                    Node.js Server
 | Line | Function | Description |
 |------|----------|-------------|
 | 54 | `constructor({ db, tempDir, settings, onProgress, onComplete, onError })` | Initialize engine |
-| 83 | `async startDownload(params)` | Full download lifecycle (probe → chunk → download → merge → verify) |
+| 83 | `async startDownload(params)` | Full download lifecycle (probe → chunk → download → merge → verify). Supports `threadMode: "auto"` | "manual"` |
 | 217 | `pauseDownload(downloadId)` | Pause active download (terminate workers) |
 | 266 | `async resumeDownload(downloadId)` | Resume paused download (rebuild chunks, spawn workers) |
 | 351 | `cancelDownload(downloadId)` | Cancel + cleanup temp files |
@@ -102,22 +102,24 @@ Chrome Extension                    Node.js Server
 | 457 | `getActiveStates()` | Get all active download states |
 | 469 | `getActiveCount()` | Count active downloads |
 | 478 | `_probeUrl(url, headers, redirectCount)` | HEAD request to detect size, range support (max 5 redirects) |
-| 547 | `async _startChunkedDownload(state, opts)` | Split file into chunks, spawn workers |
-| 592 | `_spawnWorkers(state, opts)` | Spawn worker threads for each chunk |
-| 630 | `async _spawnWorkerAsync(state, chunk, chunkPath, opts)` | Single worker lifecycle (spawn → message → exit) |
-| 689 | `_handleWorkerMessage(state, chunk, msg)` | Process worker messages (progress/chunk_done/error) |
-| 796 | `_cancelAllWorkers(state)` | Terminate all workers for a download |
-| 813 | `_buildResumeChunks(downloadId, dbDownload)` | Rebuild chunk state for resume |
-| 865 | `_getPerWorkerSpeedLimit(state)` | Calculate per-worker speed limit |
-| 876 | `_flushChunkState(state)` | Flush all chunk states to DB |
-| 915 | `_startSingleStreamDownload(state, opts)` | Single-stream download (no range support) |
-| 961 | `_doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject)` | Single HTTP GET download with progress |
-| 1059 | `async _resumeSingleStreamDownload(state, opts)` | Resume single-stream |
-| 1072 | `async _resumeChunkedDownload(state, opts)` | Resume multi-thread download |
-| 1106 | `_recalcProgress(state)` | Recalculate speed, ETA, progress % |
-| 1147 | `_checkCompletion(state)` | Check if all chunks done → finalize |
-| 1176 | `async _finalizeDownload(state)` | Merge chunks → verify size/checksum → DB update |
-| 1239 | `_formatState(state)` | Format state for API response |
+| 488 | `_autoDetectThreads(totalSize)` | Auto thread count based on file size (<5MB→1, 5-50MB→4, 50-500MB→16, >500MB→32, cap 64) |
+| 516 | `async _startChunkedDownload(state, opts)` | Split file into chunks, spawn workers |
+| 561 | `_spawnWorkers(state, opts)` | Spawn worker threads for each chunk |
+| 599 | `async _spawnWorkerAsync(state, chunk, chunkPath, opts)` | Single worker lifecycle (spawn → message → exit) |
+| 658 | `_handleWorkerMessage(state, chunk, msg)` | Process worker messages (progress/chunk_done/error/throttle) |
+| 799 | `_handleThrottle(state)` | Reduce threads on 429/ECONNRESET (halve each time, cap at 4 after 3+ throttles) |
+| 826 | `_cancelAllWorkers(state)` | Terminate all workers for a download |
+| 843 | `_buildResumeChunks(downloadId, dbDownload)` | Rebuild chunk state for resume |
+| 895 | `_getPerWorkerSpeedLimit(state)` | Calculate per-worker speed limit |
+| 906 | `_flushChunkState(state)` | Flush all chunk states to DB |
+| 945 | `_startSingleStreamDownload(state, opts)` | Single-stream download (no range support) |
+| 991 | `_doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject)` | Single HTTP GET download with progress |
+| 1089 | `async _resumeSingleStreamDownload(state, opts)` | Resume single-stream |
+| 1102 | `async _resumeChunkedDownload(state, opts)` | Resume multi-thread download |
+| 1136 | `_recalcProgress(state)` | Recalculate speed, ETA, progress % |
+| 1177 | `_checkCompletion(state)` | Check if all chunks done → finalize |
+| 1206 | `async _finalizeDownload(state)` | Merge chunks → verify size/checksum → DB update |
+| 1269 | `_formatState(state)` | Format state for API response (includes thread_mode, throttle_count) |
 
 ---
 
@@ -135,6 +137,7 @@ Chrome Extension                    Node.js Server
 - Redirect validation (max 5, SSRF check)
 - Retry with exponential backoff
 - Timeout handling
+- Throttle detection: reports 429 and ECONNRESET as `throttle` messages to parent
 
 ---
 

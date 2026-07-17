@@ -1,0 +1,41 @@
+Role: Engineer
+Context: D:\IDMAM\app\ — Node.js download manager (IDMM). Core engine at src/engine/downloader.js, server at src/server/server.js, settings via SQLite.
+Task: Add AUTO thread detection mode.
+
+Requirements:
+1. In downloader.js startDownload():
+   - New param: threadMode = "auto" | "manual" (default "auto")
+   - If manual: use requestedThreads as-is (current behavior, max 128)
+   - If auto: run adaptive logic:
+     a. File < 5MB → 1 thread (no chunking overhead worth it)
+     b. File 5-50MB → 4 threads
+     c. File 50-500MB → 16 threads
+     d. File > 500MB → 32 threads
+     e. If server doesnt support Accept-Ranges → 1 thread (already handled)
+   - Auto mode max = 64 threads (safety)
+   - Manual mode max = 128 threads
+
+2. In downloader.js _startChunkedDownload() or worker error handler:
+   - If worker gets 429 Too Many Requests or ECONNRESET → reduce threads by half, retry
+   - Track consecutive throttles per download — if 3+ throttles → cap at 4 threads for that download
+
+3. In server.js POST /api/downloads:
+   - Accept optional threadMode field ("auto" | "manual")
+   - Pass to startDownload()
+
+4. Settings (default_threads becomes default_thread_mode):
+   - Add "default_thread_mode" setting (default "auto")
+   - Keep "default_threads" as fallback for manual mode
+   - Keep "max_threads_per_download" — now means max for manual mode (default 128)
+
+5. In Settings.jsx (electron/ui/src/components/Settings.jsx):
+   - Add Thread Mode dropdown: Auto / Manual
+   - When Manual: show threads input (1-128)
+   - When Auto: hide threads input, show explanation text
+
+6. Update FUNCTION-MAP.md with new functions/changes
+
+Output contract:
+  1. Files modified list
+  2. How to test (node main.js + curl commands)
+  3. Known issues

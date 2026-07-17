@@ -93,6 +93,8 @@ class ResumeManager {
       cookies: state.cookies || null,
       referrer: state.referrer || null,
       headers: state.headers || null,
+      threadMode: state.threadMode || 'manual',
+      _throttleCount: state._throttleCount || 0,
     };
 
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');

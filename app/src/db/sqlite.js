@@ -176,8 +176,9 @@ class IDMAMDatabase {
   _initSettings() {
     const defaults = {
       default_threads: '8',
+      default_thread_mode: 'auto',
       max_concurrent_downloads: '5',
-      max_threads_per_download: '64',
+      max_threads_per_download: '128',
       default_save_path: path.join(require('node:os').homedir(), 'Downloads', 'IDMAM'),
       temp_dir: path.join(require('node:os').homedir(), '.idmam', 'temp'),
       retry_count: '3',

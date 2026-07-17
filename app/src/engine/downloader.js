@@ -74,7 +74,8 @@ class DownloadManager {
    * @param {string} params.url - Download URL (required)
    * @param {string} [params.filename] - Desired filename
    * @param {string} [params.saveTo] - Save directory
-   * @param {number} [params.threads] - Number of threads
+   * @param {number} [params.threads] - Number of threads (used in manual mode)
+   * @param {string} [params.threadMode] - "auto" | "manual" (default: from settings or "auto")
    * @param {string} [params.cookies] - Cookie string
    * @param {string} [params.referrer] - Referrer URL
    * @param {Object} [params.headers] - Additional headers
@@ -86,6 +87,7 @@ class DownloadManager {
       filename,
       saveTo,
       threads: requestedThreads,
+      threadMode: requestedThreadMode,
       cookies,
       referrer,
       headers: extraHeaders = {},
@@ -93,13 +95,24 @@ class DownloadManager {
 
     if (!url) throw new Error('URL is required');
 
+    // Resolve thread mode: param > settings > default "auto"
+    const threadMode = (requestedThreadMode || this.settings.default_thread_mode || 'auto').toLowerCase();
+
     // Resolve settings (coerce to numbers — DB stores everything as strings)
     const defaultThreads = parseInt(this.settings.default_threads, 10) || 8;
-    const maxThreads = parseInt(this.settings.max_threads_per_download, 10) || 64;
-    const threads = Math.min(
-      Math.max(requestedThreads || defaultThreads, 1),
-      maxThreads
-    );
+    let threads;
+    if (threadMode === 'manual') {
+      // Manual mode: use requested or default, capped at max_threads_per_download (128)
+      const maxManualThreads = parseInt(this.settings.max_threads_per_download, 10) || 128;
+      threads = Math.min(
+        Math.max(requestedThreads || defaultThreads, 1),
+        maxManualThreads
+      );
+    } else {
+      // Auto mode: will be determined after probe (size-based heuristic)
+      // Placeholder — actual value set after HEAD probe returns contentLength
+      threads = null;
+    }
     const savePath = saveTo || this.settings.default_save_path || path.join(require('node:os').homedir(), 'Downloads', 'IDMAM');
     const retryCount = parseInt(this.settings.retry_count, 10) || 3;
     const timeoutMs = parseInt(this.settings.timeout_ms, 10) || 30000;
@@ -129,6 +142,16 @@ class DownloadManager {
     const mimeType = probe.contentType || detectMime(finalFilename);
     const category = resolveCategory(finalFilename, probe.contentType);
 
+    // Resolve final thread count (auto mode needs file size from probe)
+    let finalThreads;
+    if (!probe.acceptsRanges || (probe.contentLength || 0) === 0) {
+      finalThreads = 1; // No range support or unknown size → single stream
+    } else if (threadMode === 'auto') {
+      finalThreads = this._autoDetectThreads(probe.contentLength);
+    } else {
+      finalThreads = threads; // Already clamped in manual branch above
+    }
+
     // Step 3: Create download record
     const downloadId = uuidv4();
     const download = {
@@ -137,7 +160,7 @@ class DownloadManager {
       filename: finalFilename,
       saveTo: savePath,
       totalSize: probe.contentLength || 0,
-      threads: probe.acceptsRanges ? threads : 1,
+      threads: finalThreads,
       mimeType,
       category,
       cookies,
@@ -162,6 +185,7 @@ class DownloadManager {
       saveTo: savePath,
       totalSize: download.totalSize,
       threads: download.threads,
+      threadMode,
       status: 'downloading',
       downloaded: 0,
       speed: 0,
@@ -176,6 +200,7 @@ class DownloadManager {
       requestHeaders, // BUG FIX: Store for fallback to single-stream on noRangeSupport
       noRangeSupport: false,
       speedLimit: (parseInt(this.settings.speed_limit_global, 10) || 0) * 1024, // KB/s → bytes/s
+      _throttleCount: 0, // Track consecutive 429/ECONNRESET events
     };
 
     this.active.set(downloadId, state);
@@ -206,6 +231,7 @@ class DownloadManager {
       filename: finalFilename,
       total_size: download.totalSize,
       threads: download.threads,
+      thread_mode: threadMode,
       created_at: new Date().toISOString(),
     };
   }
@@ -294,6 +320,7 @@ class DownloadManager {
       saveTo: dbDownload.save_to,
       totalSize: dbDownload.total_size,
       threads: dbDownload.threads,
+      threadMode: (resumeState && resumeState.threadMode) || 'manual',
       status: 'downloading',
       downloaded: totalDownloaded,
       speed: 0,
@@ -307,6 +334,7 @@ class DownloadManager {
       headers: dbDownload.headers,
       noRangeSupport: false,
       speedLimit: (parseInt(this.settings.speed_limit_global, 10) || 0) * 1024, // KB/s → bytes/s
+      _throttleCount: (resumeState && resumeState._throttleCount) || 0,
     };
 
     this.active.set(downloadId, state);
@@ -476,6 +504,34 @@ class DownloadManager {
    */
   getActiveCount() {
     return this.active.size;
+  }
+
+  // ─── Internal: Auto Thread Detection ─────────────────────────────
+
+  /**
+   * Determine optimal thread count based on file size.
+   * Auto mode heuristics:
+   *   < 5MB    → 1 thread  (no chunking overhead worth it)
+   *   5-50MB   → 4 threads
+   *   50-500MB → 16 threads
+   *   > 500MB  → 32 threads
+   * Hard cap: 64 threads (safety).
+   * @param {number} totalSize - File size in bytes
+   * @returns {number} Recommended thread count
+   */
+  _autoDetectThreads(totalSize) {
+    const MB = 1024 * 1024;
+    let threads;
+    if (totalSize < 5 * MB) {
+      threads = 1;
+    } else if (totalSize < 50 * MB) {
+      threads = 4;
+    } else if (totalSize < 500 * MB) {
+      threads = 16;
+    } else {
+      threads = 32;
+    }
+    return Math.min(threads, 64); // Auto mode hard cap
   }
 
   // ─── Internal: Probing ───────────────────────────────────────────
@@ -793,6 +849,11 @@ class DownloadManager {
         }
         break;
 
+      case 'throttle':
+        // Server is rate-limiting or connection reset — reduce threads
+        this._handleThrottle(state);
+        break;
+
       case 'retry':
         chunk.status = 'retrying';
         break;
@@ -800,6 +861,43 @@ class DownloadManager {
       case 'attempt':
         // Worker is starting an attempt
         break;
+    }
+  }
+
+  /**
+   * Handle throttle event (429 / ECONNRESET) from a worker.
+   * Strategy: reduce active threads by half; after 3+ consecutive throttles, cap at 4.
+   * @param {Object} state - Download state
+   */
+  _handleThrottle(state) {
+    state._throttleCount = (state._throttleCount || 0) + 1;
+    console.log(`[IDMAM] Throttle #${state._throttleCount} for download ${state.id}`);
+
+    let newThreads;
+    if (state._throttleCount >= 3) {
+      // 3+ consecutive throttles — hard cap at 4 threads
+      newThreads = Math.min(state.threads, 4);
+    } else {
+      // Reduce by half, minimum 1
+      newThreads = Math.max(Math.floor(state.threads / 2), 1);
+    }
+
+    if (newThreads >= state.threads) return; // No reduction needed
+
+    console.log(`[IDMAM] Reducing threads for ${state.id}: ${state.threads} → ${newThreads}`);
+    state.threads = newThreads;
+    this.db.updateDownload(state.id, { threads: newThreads });
+
+    // Terminate excess workers (keep only newThreads count)
+    const activeWorkers = state.workers.filter(w => w && !w.exited);
+    const excess = activeWorkers.length - newThreads;
+    if (excess > 0) {
+      // Terminate the last N workers (they were likely the ones hitting limits)
+      const toTerminate = activeWorkers.slice(-excess);
+      for (const worker of toTerminate) {
+        worker.__terminated = true;
+        worker.terminate();
+      }
     }
   }
 
@@ -1267,6 +1365,8 @@ class DownloadManager {
       speed: Math.round(state.speed || 0),
       eta: state.eta || 0,
       threads: state.threads,
+      thread_mode: state.threadMode || null,
+      throttle_count: state._throttleCount || 0,
       active_threads: state.workers.filter(w => w && !w.exited).length,
       chunks: state.chunks.map(c => ({
         index: c.index,

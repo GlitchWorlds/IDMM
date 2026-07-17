@@ -3,7 +3,8 @@ import { getSettings, updateSettings } from '../api';
 
 export default function Settings({ onBack }) {
   const [settings, setSettings] = useState({
-    threads: 4,
+    threadMode: 'auto',
+    threads: 8,
     savePath: '',
   });
   const [loading, setLoading] = useState(true);
@@ -17,6 +18,7 @@ export default function Settings({ onBack }) {
           // Map server snake_case keys to frontend camelCase
           setSettings((prev) => ({
             ...prev,
+            threadMode: s.default_thread_mode ?? prev.threadMode,
             threads: Number(s.default_threads ?? s.threads ?? prev.threads),
             savePath: s.default_save_path ?? s.savePath ?? prev.savePath,
           }));
@@ -32,6 +34,7 @@ export default function Settings({ onBack }) {
     try {
       // Map frontend camelCase to server snake_case keys
       const payload = {
+        default_thread_mode: settings.threadMode,
         default_threads: String(settings.threads),
         default_save_path: settings.savePath || '',
       };
@@ -69,22 +72,54 @@ export default function Settings({ onBack }) {
       </div>
 
       <div className="space-y-6">
-        {/* Download Threads */}
+        {/* Thread Mode */}
         <div className="bg-slate-800/50 rounded-xl p-5">
-          <label className="block text-sm font-medium text-slate-300 mb-2">Download Threads</label>
-          <p className="text-xs text-slate-500 mb-3">Number of parallel download connections</p>
-          <div className="flex items-center gap-4">
-            <input
-              type="range"
-              min={1}
-              max={32}
-              value={settings.threads}
-              onChange={(e) => setSettings({ ...settings, threads: Number(e.target.value) })}
-              className="flex-1 accent-blue-500"
-            />
-            <span className="text-sm font-mono text-blue-400 w-8 text-center">{settings.threads}</span>
-          </div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Thread Mode</label>
+          <p className="text-xs text-slate-500 mb-3">How download threads are determined</p>
+          <select
+            value={settings.threadMode}
+            onChange={(e) => setSettings({ ...settings, threadMode: e.target.value })}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+          >
+            <option value="auto">Auto (recommended)</option>
+            <option value="manual">Manual</option>
+          </select>
         </div>
+
+        {/* Download Threads — only shown in Manual mode */}
+        {settings.threadMode === 'manual' ? (
+          <div className="bg-slate-800/50 rounded-xl p-5">
+            <label className="block text-sm font-medium text-slate-300 mb-2">Download Threads</label>
+            <p className="text-xs text-slate-500 mb-3">Number of parallel download connections (1–128)</p>
+            <div className="flex items-center gap-4">
+              <input
+                type="range"
+                min={1}
+                max={128}
+                value={settings.threads}
+                onChange={(e) => setSettings({ ...settings, threads: Number(e.target.value) })}
+                className="flex-1 accent-blue-500"
+              />
+              <span className="text-sm font-mono text-blue-400 w-10 text-center">{settings.threads}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-800/50 rounded-xl p-5">
+            <label className="block text-sm font-medium text-slate-300 mb-2">Auto Thread Detection</label>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Thread count is chosen automatically based on file size:
+            </p>
+            <ul className="mt-2 text-xs text-slate-500 space-y-1">
+              <li>&lt; 5 MB &rarr; 1 thread</li>
+              <li>5–50 MB &rarr; 4 threads</li>
+              <li>50–500 MB &rarr; 16 threads</li>
+              <li>&gt; 500 MB &rarr; 32 threads</li>
+            </ul>
+            <p className="mt-2 text-xs text-slate-500">
+              Max 64 threads. Automatically reduces on server throttling.
+            </p>
+          </div>
+        )}
 
         {/* Save Path */}
         <div className="bg-slate-800/50 rounded-xl p-5">
