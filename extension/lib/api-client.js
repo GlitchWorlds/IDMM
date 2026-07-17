@@ -109,6 +109,7 @@ const IDMM_API = {
     maxThreads: 'default_threads',
     defaultSavePath: 'default_save_path',
     interceptMinSize: 'intercept_min_size',
+    interceptAll: 'intercept_all',
     interceptVideo: 'intercept_video',
     interceptAudio: 'intercept_audio',
     interceptArchive: 'intercept_archive',
@@ -120,6 +121,7 @@ const IDMM_API = {
     default_threads: 'maxThreads',
     default_save_path: 'defaultSavePath',
     intercept_min_size: 'interceptMinSize',
+    intercept_all: 'interceptAll',
     intercept_video: 'interceptVideo',
     intercept_audio: 'interceptAudio',
     intercept_archive: 'interceptArchive',
@@ -236,7 +238,8 @@ const IDMM_API = {
       enabled: true,
       maxThreads: 8,
       defaultSavePath: '',
-      interceptMinSize: 5 * 1024 * 1024, // 5MB
+      interceptMinSize: 0, // Intercept all downloads regardless of size
+      interceptAll: true, // Intercept all file types
       interceptVideo: true,
       interceptAudio: true,
       interceptArchive: true,
@@ -271,6 +274,9 @@ const IDMM_API = {
     // Size threshold — skip small files
     const minSize = settings.interceptMinSize || 0;
     if (fileSize > 0 && fileSize < minSize) return false;
+
+    // Intercept all files if enabled
+    if (settings.interceptAll) return true;
 
     const categories = {
       video: settings.interceptVideo,

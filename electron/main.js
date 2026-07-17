@@ -76,12 +76,16 @@ function createWindow() {
     icon: path.join(__dirname, 'assets', 'icon.png'),
     backgroundColor: '#0f172a',
     show: false, // Show when ready
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
   });
+
+  // Remove menu bar completely
+  mainWindow.removeMenu();
 
   // Load UI
   const isDev = process.argv.includes('--dev');

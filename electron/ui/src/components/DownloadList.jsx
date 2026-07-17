@@ -57,7 +57,7 @@ function getStatusBadge(status) {
 }
 
 function DownloadItem({ download, onRefresh }) {
-  const { id, filename, url, status, progress, speed, size, downloaded, eta } = download;
+  const { id, filename, url, status, progress, speed, size, downloaded, eta, save_to } = download;
   const pct = progress || 0;
   const isActive = status === 'downloading' || status === 'active';
   const isPaused = status === 'paused';
@@ -142,7 +142,7 @@ function DownloadItem({ download, onRefresh }) {
           )}
           {isCompleted && (
             <>
-              <button onClick={() => openFolder(download.save_to)} className="p-2 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors" title="Open Folder">
+              <button onClick={() => openFolder(save_to)} className="p-2 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors" title="Open Folder">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>

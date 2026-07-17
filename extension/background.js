@@ -149,12 +149,16 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
   // Skip if we already intercepted this (avoid loops)
   if (interceptedIds.has(item.id)) {
     interceptedIds.delete(item.id);
-    return; // Let the browser handle the filename
+    suggest(); // Let browser handle
+    return;
   }
 
   // Check settings
   const settings = await IDMM_API.getSettings();
-  if (!settings.enabled) return;
+  if (!settings.enabled) {
+    suggest();
+    return;
+  }
 
   // Check if file should be intercepted
   const should = IDMM_API.shouldIntercept(
@@ -163,7 +167,10 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
     settings
   );
 
-  if (!should) return;
+  if (!should) {
+    suggest();
+    return;
+  }
 
   // Send to IDMM
   const sent = await sendToIDMM({
@@ -175,15 +182,26 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
   });
 
   if (sent) {
-    // Mark and cancel browser download
+    // Mark as intercepted first
     interceptedIds.add(item.id);
+    // Cancel Chrome's download BEFORE suggesting filename
     try {
       await chrome.downloads.cancel(item.id);
-      await chrome.downloads.erase({ id: item.id });
     } catch {
       // Download may have already been cancelled
     }
+    // Erase from Chrome's download list
+    try {
+      await chrome.downloads.erase({ id: item.id });
+    } catch {
+      // May already be erased
+    }
+    // Don't call suggest - download is cancelled
+    return;
   }
+
+  // If send failed, let browser handle it
+  suggest();
 });
 
 // ─── Context Menu ───────────────────────────────────────────────
