@@ -20,23 +20,23 @@ const IDMMServer = require('./src/server/server');
 // ─── Configuration ─────────────────────────────────────────────────
 
 const APP_DIR = __dirname;
-const LEGACY_DATA_DIR = path.join(os.homedir(), '.IDMM');
+const LEGACY_DATA_DIR = path.join(os.homedir(), '.idmam');
 const DATA_DIR = path.join(os.homedir(), '.idmm');
 const DB_PATH = path.join(DATA_DIR, 'idmm.db');
 const TEMP_DIR = path.join(DATA_DIR, 'temp');
 const DEFAULT_SAVE_PATH = path.join(os.homedir(), 'Downloads', 'IDMM');
 
-// ─── Data Migration (.IDMM → .idmm) ──────────────────────────────
+// ─── Data Migration (.idmam → .idmm) ──────────────────────────────
 // Migrate legacy data directory if it exists and new one doesn't
 if (fs.existsSync(LEGACY_DATA_DIR) && !fs.existsSync(DATA_DIR)) {
   try {
     fs.renameSync(LEGACY_DATA_DIR, DATA_DIR);
-    console.log('[IDMM] Migrated data dir: .IDMM → .idmm');
+    console.log('[IDMM] Migrated data dir: .idmam → .idmm');
     // Rename DB file if it still has the old name
-    const legacyDb = path.join(DATA_DIR, 'IDMM.db');
+    const legacyDb = path.join(DATA_DIR, 'idmam.db');
     if (fs.existsSync(legacyDb)) {
       fs.renameSync(legacyDb, DB_PATH);
-      console.log('[IDMM] Migrated DB: IDMM.db → idmm.db');
+      console.log('[IDMM] Migrated DB: idmam.db → idmm.db');
     }
   } catch (err) {
     console.error('[IDMM] Data migration failed (using existing paths):', err.message);

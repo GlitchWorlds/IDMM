@@ -13,7 +13,7 @@ const path = require('node:path');
 
 class ResumeManager {
   /**
-   * @param {string} tempDir - Base temp directory (e.g., ~/.IDMM/temp)
+   * @param {string} tempDir - Base temp directory (e.g., ~/.idmm/temp)
    */
   constructor(tempDir) {
     this.tempDir = tempDir;
