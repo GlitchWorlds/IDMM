@@ -224,7 +224,7 @@ function DownloadItem({ download, onRefresh }) {
 function DownloadList({ downloads, onRefresh }) {
   if (!downloads || downloads.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-slate-500">
+      <div className="flex flex-col items-center justify-center h-64 text-slate-500" style={{ WebkitAppRegion: 'no-drag' }}>
         <svg className="w-16 h-16 mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
@@ -235,7 +235,7 @@ function DownloadList({ downloads, onRefresh }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" style={{ WebkitAppRegion: 'no-drag' }}>
       {downloads.map((d) => (
         <DownloadItem key={d.id} download={d} onRefresh={onRefresh} />
       ))}

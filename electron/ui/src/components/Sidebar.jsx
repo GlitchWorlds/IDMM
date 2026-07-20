@@ -10,11 +10,11 @@ const NAV_ITEMS = [
   { key: 'queue', label: 'Queue', icon: 'M12 8v4l3 3' },
 ];
 
-function Sidebar({ filter, onFilterChange, onSettingsClick, speedHistory, stats }) {
+function Sidebar({ filter, onFilterChange, onSettingsClick, speedHistory, stats, style }) {
   return (
-    <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-full shrink-0">
+    <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-full shrink-0" style={{ ...style, WebkitAppRegion: 'drag' }}>
       {/* Logo */}
-      <div className="p-6 border-b border-slate-800">
+      <div className="p-6 border-b border-slate-800" style={{ WebkitAppRegion: 'drag' }}>
         <h1 className="text-xl font-bold bg-gradient-to-r from-accent to-purple-500 bg-clip-text text-transparent">
           IDMM
         </h1>
@@ -22,7 +22,7 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, speedHistory, stats 
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-1" style={{ WebkitAppRegion: 'no-drag' }}>
         {NAV_ITEMS.map((item) => (
           <button
             key={item.key}
@@ -42,7 +42,7 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, speedHistory, stats 
       </nav>
 
       {/* Speed Graph Widget */}
-      <div className="p-4 border-t border-slate-800">
+      <div className="p-4 border-t border-slate-800" style={{ WebkitAppRegion: 'no-drag' }}>
         <p className="text-xs text-slate-500 mb-2">Speed</p>
         <SpeedGraph data={speedHistory} mini />
         {stats?.totalSpeed > 0 && (
@@ -53,7 +53,7 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, speedHistory, stats 
       </div>
 
       {/* Settings */}
-      <div className="p-3 border-t border-slate-800 space-y-1">
+      <div className="p-3 border-t border-slate-800 space-y-1" style={{ WebkitAppRegion: 'no-drag' }}>
         <button
           onClick={onSettingsClick}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"

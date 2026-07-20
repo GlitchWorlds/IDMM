@@ -104,15 +104,16 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-900 text-slate-100 font-sans">
+    <div className="flex h-screen bg-slate-900 text-slate-100 font-sans" style={{ WebkitAppRegion: 'drag' }}>
       <Sidebar
         filter={filter}
         onFilterChange={setFilter}
         onSettingsClick={() => setShowSettings(true)}
         speedHistory={speedHistory}
         stats={stats}
+        style={{ WebkitAppRegion: 'no-drag' }}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ WebkitAppRegion: 'no-drag' }}>
         <Header
           search={search}
           onSearchChange={setSearch}

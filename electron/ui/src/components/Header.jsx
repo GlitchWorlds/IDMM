@@ -10,7 +10,7 @@ const FILTER_BTNS = [
 
 function Header({ search, onSearchChange, totalSpeed, onAddClick, activeCount, completedCount }) {
   return (
-    <header className="bg-slate-900/80 backdrop-blur-sm border-b border-slate-800 px-6 py-3 shrink-0" style={{ WebkitAppRegion: 'drag' }}>
+    <header className="bg-slate-900/80 backdrop-blur-sm border-b border-slate-800 px-6 py-3 shrink-0 flex-none" style={{ paddingRight: '140px', WebkitAppRegion: 'drag' }}>
       <div className="flex items-center gap-4" style={{ WebkitAppRegion: 'no-drag' }}>
         {/* Search */}
         <div className="relative flex-1 max-w-md">
