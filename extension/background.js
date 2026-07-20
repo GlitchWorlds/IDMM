@@ -184,19 +184,14 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
   if (sent) {
     // Mark as intercepted first
     interceptedIds.add(item.id);
-    // Cancel Chrome's download BEFORE suggesting filename
-    try {
-      await chrome.downloads.cancel(item.id);
-    } catch {
-      // Download may have already been cancelled
-    }
-    // Erase from Chrome's download list
-    try {
-      await chrome.downloads.erase({ id: item.id });
-    } catch {
-      // May already be erased
-    }
-    // Don't call suggest - download is cancelled
+    
+    // Attempt Chrome download cancellation
+    chrome.downloads.cancel(item.id, () => {
+      chrome.downloads.erase({ id: item.id }, () => {});
+    });
+    
+    // You MUST still call suggest or the request hangs
+    suggest();
     return;
   }
 
