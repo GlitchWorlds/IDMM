@@ -29,7 +29,6 @@
   ],
 
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -37,8 +36,6 @@
     },
     "default_title": "IDMM Download Manager"
   },
-
-  "options_page": "options/options.html",
 
   "icons": {
     "16": "icons/icon16.png",

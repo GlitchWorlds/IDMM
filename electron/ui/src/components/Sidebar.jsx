@@ -41,17 +41,6 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, speedHistory, stats,
         ))}
       </nav>
 
-      {/* Speed Graph Widget */}
-      <div className="p-4 border-t border-slate-800" style={{ WebkitAppRegion: 'no-drag' }}>
-        <p className="text-xs text-slate-500 mb-2">Speed</p>
-        <SpeedGraph data={speedHistory} mini />
-        {stats?.totalSpeed > 0 && (
-          <p className="text-xs text-accent mt-2 text-center">
-            {formatSpeed(stats.totalSpeed)}
-          </p>
-        )}
-      </div>
-
       {/* Settings */}
       <div className="p-3 border-t border-slate-800 space-y-1" style={{ WebkitAppRegion: 'no-drag' }}>
         <button
