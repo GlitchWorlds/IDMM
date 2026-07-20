@@ -86,8 +86,9 @@ function createWindow() {
     },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: false,
+      nodeIntegration: true,
       contextIsolation: true,
+      sandbox: false
     },
   });
 
@@ -108,6 +109,14 @@ function createWindow() {
   // Show when ready
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+  });
+
+  // Debugging logs from renderer
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer] ${message} (line ${line})`);
+  });
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log(`[Renderer Error] Failed to load: ${errorDescription}`);
   });
 
   // Minimize to tray instead of closing

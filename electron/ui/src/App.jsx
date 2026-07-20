@@ -15,6 +15,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [speedHistory, setSpeedHistory] = useState([]);
   // Theming state
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('idmm_theme') || 'dark-green';
