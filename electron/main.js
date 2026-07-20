@@ -94,14 +94,16 @@ function createWindow() {
   // Remove menu bar completely
   mainWindow.removeMenu();
 
-  // Load UI
-  const isDev = process.argv.includes('--dev');
-  if (isDev) {
-    mainWindow.loadURL(UI_DEV_URL);
-    mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(UI_PROD_PATH);
-  }
+    // Load UI
+    const isDev = process.argv.includes('--dev');
+    if (isDev) {
+      mainWindow.loadURL(UI_DEV_URL);
+      mainWindow.webContents.openDevTools();
+    } else {
+      // In production, Vite uses relative /assets/ output paths.
+      // We must load via a secure file:// URL to root it properly
+      mainWindow.loadURL(`file://${UI_PROD_PATH}`);
+    }
 
   // Show when ready
   mainWindow.once('ready-to-show', () => {
