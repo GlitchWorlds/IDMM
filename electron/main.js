@@ -196,9 +196,8 @@ app.whenReady().then(async () => {
     setInterval(() => {
       if (tray && downloader) {
         const count = downloader.getActiveCount();
-        const menu = tray.contextMenu;
-        if (menu) {
-          const items = menu.items;
+        if (tray.contextMenu) {
+          const items = tray.contextMenu.items;
           const countItem = items.find(i => i.id === 'active-count');
           if (countItem) countItem.label = `Active Downloads: ${count}`;
         }
