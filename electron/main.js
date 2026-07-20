@@ -102,7 +102,7 @@ function createWindow() {
     } else {
       // In production, Vite uses relative /assets/ output paths.
       // We must load via a secure file:// URL to root it properly
-      mainWindow.loadURL(`file://${UI_PROD_PATH}`);
+      mainWindow.loadURL(`file:///${UI_PROD_PATH.replace(/\\/g, '/')}`);
     }
 
   // Show when ready

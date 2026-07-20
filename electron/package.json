@@ -30,6 +30,7 @@
       "ui/build/**/*",
       "node_modules/**/*"
     ],
+    "asar": false,
     "extraResources": [
       {
         "from": "../extension",
