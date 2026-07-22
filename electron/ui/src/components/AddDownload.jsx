@@ -4,6 +4,7 @@ import { addDownload } from '../api';
 export default function AddDownload({ onClose, onAdded }) {
   const [url, setUrl] = useState('');
   const [filename, setFilename] = useState('');
+  const [savePath, setSavePath] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef(null);
@@ -18,7 +19,11 @@ export default function AddDownload({ onClose, onAdded }) {
     setLoading(true);
     setError('');
     try {
-      await addDownload(url.trim(), { filename: filename.trim() || undefined });
+      const options = {};
+      if (filename.trim()) options.filename = filename.trim();
+      if (savePath.trim()) options.savePath = savePath.trim();
+      
+      await addDownload(url.trim(), options);
       onAdded?.();
       onClose();
     } catch (err) {
@@ -34,6 +39,15 @@ export default function AddDownload({ onClose, onAdded }) {
       setUrl(text);
     } catch {
       // clipboard access denied
+    }
+  };
+
+  const handleSelectFolder = async () => {
+    if (window.idmm && window.idmm.selectFolder) {
+      const folder = await window.idmm.selectFolder();
+      if (folder) {
+        setSavePath(folder);
+      }
     }
   };
 
@@ -94,6 +108,27 @@ export default function AddDownload({ onClose, onAdded }) {
               placeholder="file.zip"
               className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
             />
+          </div>
+
+          {/* Save Path (optional) */}
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Save Path <span className="text-slate-500">(optional)</span></label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={savePath}
+                onChange={(e) => setSavePath(e.target.value)}
+                placeholder="Leave blank for default"
+                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
+              />
+              <button
+                type="button"
+                onClick={handleSelectFolder}
+                className="px-3 py-2.5 rounded-lg bg-slate-700 text-slate-300 text-sm hover:bg-slate-600 transition-colors whitespace-nowrap"
+              >
+                Select Folder
+              </button>
+            </div>
           </div>
 
           {/* Submit */}

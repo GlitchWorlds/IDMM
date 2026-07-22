@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -250,4 +250,15 @@ if (!gotLock) {
     }
   });
 }
+
+// IPC Handlers
+ipcMain.handle('dialog:selectFolder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  if (!canceled) {
+    return filePaths[0];
+  }
+  return null;
+});
 

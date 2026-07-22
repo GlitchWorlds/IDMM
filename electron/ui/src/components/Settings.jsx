@@ -48,6 +48,15 @@ export default function Settings({ onBack, theme, onThemeChange }) {
     }
   };
 
+  const handleSelectFolder = async () => {
+    if (window.idmm && window.idmm.selectFolder) {
+      const folder = await window.idmm.selectFolder();
+      if (folder) {
+        setSettings({ ...settings, savePath: folder });
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -139,13 +148,22 @@ export default function Settings({ onBack, theme, onThemeChange }) {
         <div className="bg-slate-800/50 rounded-xl p-5">
           <label className="block text-sm font-medium text-slate-300 mb-2">Save Path</label>
           <p className="text-xs text-slate-500 mb-3">Default download directory</p>
-          <input
-            type="text"
-            value={settings.savePath}
-            onChange={(e) => setSettings({ ...settings, savePath: e.target.value })}
-            placeholder="C:\Downloads"
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={settings.savePath}
+              onChange={(e) => setSettings({ ...settings, savePath: e.target.value })}
+              placeholder="C:\Downloads"
+              className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
+            />
+            <button
+              type="button"
+              onClick={handleSelectFolder}
+              className="px-3 py-2.5 rounded-lg bg-slate-700 text-slate-300 text-sm hover:bg-slate-600 transition-colors whitespace-nowrap"
+            >
+              Select Folder
+            </button>
+          </div>
         </div>
 
         {/* Save Button */}
