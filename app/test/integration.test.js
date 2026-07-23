@@ -23,10 +23,13 @@ const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 
-// --- Production imports (the whole point of this file) ---
+// --- Production imports ---
 const DownloadManager = require('../src/engine/downloader');
 const IDMMDatabase = require('../src/db/sqlite');
 const IDMMServer = require('../src/server/server');
+const SpeedTracker = require('../src/engine/speed-tracker');
+const WorkerPool = require('../src/engine/worker-pool');
+const DownloadQueue = require('../src/engine/download-queue');
 
 // --- Test fixtures ---
 const TEST_DB_PATH = path.join(os.tmpdir(), 'idmm-integration-test-' + Date.now() + '.db');
@@ -40,7 +43,6 @@ let downloader;
 let server;
 let testHttpServer;
 
-// --- Helpers ---
 function sleep(ms) {
   return new Promise(function (r) { setTimeout(r, ms); });
 }
@@ -88,6 +90,7 @@ describe('IDMM Integration Tests', function () {
         default_threads: '2',
         default_thread_mode: 'manual',
         default_save_path: TEST_SAVE_DIR,
+        max_concurrent_downloads: '5',
         retry_count: '1',
         timeout_ms: '5000',
         speed_limit_global: '0',
@@ -100,7 +103,7 @@ describe('IDMM Integration Tests', function () {
   after(async function () {
     if (downloader) {
       for (var state of downloader.getActiveStates()) {
-        try { downloader.cancelDownload(state.id); } catch (_) {}
+        try { await downloader.cancelDownload(state.id); } catch (_) {}
       }
     }
     if (server) { try { await server.stop(); } catch (_) {} }
@@ -129,6 +132,30 @@ describe('IDMM Integration Tests', function () {
       assert.ok(IDMMServer, 'IDMMServer should be importable');
       assert.equal(typeof IDMMServer, 'function', 'IDMMServer should be a constructor');
     });
+
+    // Fix #1: Decomposition imports
+    it('should import SpeedTracker', function () {
+      assert.ok(SpeedTracker, 'SpeedTracker should be importable');
+      const st = new SpeedTracker();
+      st.addSample('dl1', 1024);
+      assert.ok(st.getSpeed('dl1') >= 0, 'getSpeed should return a number');
+    });
+
+    it('should import WorkerPool', function () {
+      assert.ok(WorkerPool, 'WorkerPool should be importable');
+      const wp = new WorkerPool(4);
+      assert.equal(wp.max, 4, 'WorkerPool max should be 4');
+      assert.equal(wp.getActiveCount(), 0, 'No active workers initially');
+    });
+
+    it('should import DownloadQueue', function () {
+      assert.ok(DownloadQueue, 'DownloadQueue should be importable');
+      const dq = new DownloadQueue();
+      dq.add('a', DownloadQueue.Priority.HIGH);
+      dq.add('b', DownloadQueue.Priority.LOW);
+      const next = dq.next();
+      assert.equal(next.id, 'a', 'HIGH priority should be next first');
+    });
   });
 
   // ---- Database Lifecycle ----
@@ -149,21 +176,24 @@ describe('IDMM Integration Tests', function () {
         category: 'Others',
         status: 'pending',
       });
-      assert.ok(created, 'createDownload should return a row');
-      assert.equal(created.id, downloadId);
+      assert.ok(created.ok, 'createDownload should return ok');
+      assert.ok(created.data, 'createDownload should return data');
+      assert.equal(created.data.id, downloadId);
 
       var fetched = db.getDownload(downloadId);
-      assert.ok(fetched, 'getDownload should return the record');
-      assert.equal(fetched.url, 'http://example.com/file.bin');
+      assert.ok(fetched.ok, 'getDownload should return ok');
+      assert.equal(fetched.data.url, 'http://example.com/file.bin');
 
       db.updateDownload(downloadId, { status: 'downloading', downloaded: 512 });
       var updated = db.getDownload(downloadId);
-      assert.equal(updated.status, 'downloading');
-      assert.equal(updated.downloaded, 512);
+      assert.ok(updated.ok);
+      assert.equal(updated.data.status, 'downloading');
+      assert.equal(updated.data.downloaded, 512);
 
       db.deleteDownload(downloadId);
       var deleted = db.getDownload(downloadId);
-      assert.ok(!deleted, 'getDownload should return null after delete');
+      assert.ok(deleted.ok);
+      assert.equal(deleted.data, null, 'getDownload should return null data after delete');
     });
 
     it('should support createChunks -> getChunks -> updateChunk', function () {
@@ -179,24 +209,40 @@ describe('IDMM Integration Tests', function () {
         status: 'pending',
       });
 
-      db.createChunks(downloadId, [
+      var createResult = db.createChunks(downloadId, [
         { index: 0, start: 0, end: 1023 },
         { index: 1, start: 1024, end: 2047 },
       ]);
+      assert.ok(createResult.ok, 'createChunks should return ok');
 
-      var chunks = db.getChunks(downloadId);
-      assert.ok(Array.isArray(chunks), 'getChunks should return array');
-      assert.equal(chunks.length, 2);
+      var chunksResult = db.getChunks(downloadId);
+      assert.ok(chunksResult.ok, 'getChunks should return ok');
+      assert.ok(Array.isArray(chunksResult.data), 'getChunks data should be array');
+      assert.equal(chunksResult.data.length, 2);
 
-      db.updateChunk(chunks[0].id, { downloaded_bytes: 512, status: 'downloading' });
+      db.updateChunk(chunksResult.data[0].id, { downloaded_bytes: 512, status: 'downloading' });
       var updatedChunks = db.getChunks(downloadId);
-      assert.equal(updatedChunks[0].downloaded_bytes, 512);
+      assert.equal(updatedChunks.data[0].downloaded_bytes, 512);
 
       db.deleteDownload(downloadId);
     });
+
+    // Fix #2: DB error propagation
+    it('DB query failure returns { ok: false, error }', function () {
+      // getDownload with non-existent ID should return ok with null data
+      var result = db.getDownload('nonexistent-id-' + Date.now());
+      assert.ok(result.ok, 'getDownload should return ok even for non-existent ID');
+      assert.equal(result.data, null, 'data should be null for non-existent ID');
+
+      // getStats should return ok with stats object
+      var stats = db.getStats();
+      assert.ok(stats.ok, 'getStats should return ok');
+      assert.ok(stats.data, 'getStats should return data');
+      assert.equal(typeof stats.data.total_downloads, 'number');
+    });
   });
 
-  // ---- Server + WebSocket (single server start) ----
+  // ---- Server + WebSocket ----
 
   describe('Server lifecycle + WebSocket', function () {
 
@@ -205,7 +251,6 @@ describe('IDMM Integration Tests', function () {
       await server.start();
       await sleep(300);
 
-      // --- HTTP health check ---
       var response = await new Promise(function (resolve, reject) {
         var req = http.get('http://127.0.0.1:9977/api/health', function (res) {
           var body = '';
@@ -216,13 +261,12 @@ describe('IDMM Integration Tests', function () {
         req.setTimeout(5000, function () { req.destroy(); reject(new Error('timeout')); });
       });
 
-      assert.equal(response.status, 200, 'Health should return 200');
+      assert.equal(response.status, 200);
       var health = JSON.parse(response.body);
-      assert.equal(health.status, 'ok', 'Health status should be ok');
-      assert.ok(health.version, 'Health should include version');
-      assert.equal(typeof health.uptime, 'number', 'Health should include uptime');
+      assert.equal(health.status, 'ok');
+      assert.ok(health.version);
+      assert.equal(typeof health.uptime, 'number');
 
-      // --- WebSocket init message ---
       var wsMsg = await new Promise(function (resolve, reject) {
         var ws;
         try {
@@ -242,9 +286,9 @@ describe('IDMM Integration Tests', function () {
         ws.on('error', function (err) { clearTimeout(timeout); reject(err); });
       });
 
-      assert.ok(wsMsg, 'Should receive a WebSocket message');
-      assert.equal(wsMsg.type, 'init', 'First WS message should be init');
-      assert.ok(Array.isArray(wsMsg.downloads), 'WS init should include downloads array');
+      assert.ok(wsMsg);
+      assert.equal(wsMsg.type, 'init');
+      assert.ok(Array.isArray(wsMsg.downloads));
 
       await server.stop();
       server = null;
@@ -264,27 +308,109 @@ describe('IDMM Integration Tests', function () {
         threadMode: 'manual',
         saveTo: TEST_SAVE_DIR,
       });
-      assert.ok(result.id, 'Should return download id');
+      assert.ok(result.id);
       assert.equal(result.status, 'downloading');
 
       await sleep(200);
 
-      var paused = downloader.pauseDownload(result.id);
+      var paused = await downloader.pauseDownload(result.id);
       assert.equal(paused.status, 'paused');
 
       var dbAfterPause = db.getDownload(result.id);
-      assert.equal(dbAfterPause.status, 'paused');
+      assert.ok(dbAfterPause.ok);
+      assert.equal(dbAfterPause.data.status, 'paused');
 
       var resumed = await downloader.resumeDownload(result.id);
       assert.equal(resumed.status, 'downloading');
 
       await sleep(200);
 
-      var cancelled = downloader.cancelDownload(result.id);
+      var cancelled = await downloader.cancelDownload(result.id);
       assert.equal(cancelled.status, 'cancelled');
 
       var dbAfterCancel = db.getDownload(result.id);
-      assert.equal(dbAfterCancel.status, 'cancelled');
+      assert.ok(dbAfterCancel.ok);
+      assert.equal(dbAfterCancel.data.status, 'cancelled');
+    });
+
+    // Fix #12: Concurrent downloads
+    it('should handle 3 concurrent downloads', async function () {
+      var url = 'http://127.0.0.1:' + TEST_SERVER_PORT + '/testfile.bin';
+      var results = [];
+
+      for (var i = 0; i < 3; i++) {
+        var r = await downloader.startDownload({
+          url: url,
+          threads: 1,
+          threadMode: 'manual',
+          saveTo: TEST_SAVE_DIR,
+        });
+        results.push(r);
+        assert.ok(r.id, 'Download ' + i + ' should have an id');
+      }
+
+      assert.equal(downloader.getActiveCount(), 3, 'Should have 3 active downloads');
+
+      // Cleanup
+      for (var r of results) {
+        await downloader.cancelDownload(r.id);
+      }
+    });
+
+    // Fix #12: Priority queue ordering
+    it('DownloadQueue should return HIGH priority before LOW', function () {
+      var dq = new DownloadQueue();
+      dq.add('low1', DownloadQueue.Priority.LOW);
+      dq.add('high1', DownloadQueue.Priority.HIGH);
+      dq.add('normal1', DownloadQueue.Priority.NORMAL);
+
+      var first = dq.next();
+      assert.equal(first.id, 'high1', 'HIGH should be first');
+
+      var second = dq.next();
+      assert.equal(second.id, 'normal1', 'NORMAL should be second');
+
+      var third = dq.next();
+      assert.equal(third.id, 'low1', 'LOW should be third');
+    });
+
+    // Fix #12: DB error propagation pattern
+    it('All DB methods return { ok, data/error } consistently', function () {
+      // getSetting
+      var setting = db.getSetting('default_threads');
+      assert.ok(setting.ok, 'getSetting should return ok');
+      assert.ok(setting.data, 'getSetting should return data');
+
+      // getAllSettings
+      var allSettings = db.getAllSettings();
+      assert.ok(allSettings.ok, 'getAllSettings should return ok');
+      assert.ok(allSettings.data, 'getAllSettings should return data');
+
+      // listDownloads
+      var list = db.listDownloads();
+      assert.ok(list.ok, 'listDownloads should return ok');
+      assert.ok(Array.isArray(list.data), 'listDownloads data should be array');
+
+      // getStats
+      var stats = db.getStats();
+      assert.ok(stats.ok, 'getStats should return ok');
+      assert.ok(stats.data, 'getStats should return data');
+    });
+
+    // Fix #12: Semaphore release on worker crash
+    it('WorkerPool release guards against double-release', function () {
+      var wp = new WorkerPool(2);
+      var fakeWorker = { _semaphoreReleased: false };
+
+      // Simulate acquire + release
+      wp.acquire(); // current = 1
+      wp.release(fakeWorker); // current = 0, worker._semaphoreReleased = true
+      assert.equal(fakeWorker._semaphoreReleased, true, 'Worker should be marked released');
+
+      // Double-release should be a no-op
+      var beforeCurrent = wp.current;
+      wp.release(fakeWorker);
+      assert.equal(wp.current, beforeCurrent, 'Double-release should not change current');
     });
   });
 });

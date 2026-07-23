@@ -1,0 +1,501 @@
+{
+  "nodes": [
+    {
+      "id": "electron_ui_src_app_app",
+      "label": "App",
+      "file_type": "code",
+      "source_file": "electron/ui/src/App.jsx",
+      "source_location": "L11",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_getdownloads",
+      "label": "getDownloads",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L18",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_getdownload",
+      "label": "getDownload",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L22",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_adddownload",
+      "label": "addDownload",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L26",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_pausedownload",
+      "label": "pauseDownload",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L33",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_resumedownload",
+      "label": "resumeDownload",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L37",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_canceldownload",
+      "label": "cancelDownload",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L41",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_deletedownload",
+      "label": "deleteDownload",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L45",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_openfolder",
+      "label": "openFolder",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L50",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_getsettings",
+      "label": "getSettings",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L57",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_updatesettings",
+      "label": "updateSettings",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L61",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_getstats",
+      "label": "getStats",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L68",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_getwebsocketurl",
+      "label": "getWebSocketUrl",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L72",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_formatbytes",
+      "label": "formatBytes",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L77",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_formatspeed",
+      "label": "formatSpeed",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L85",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_api_formateta",
+      "label": "formatETA",
+      "file_type": "code",
+      "source_file": "electron/ui/src/api.js",
+      "source_location": "L93",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_components_adddownload_adddownload",
+      "label": "AddDownload",
+      "file_type": "code",
+      "source_file": "electron/ui/src/components/AddDownload.jsx",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_components_settings_settings",
+      "label": "Settings",
+      "file_type": "code",
+      "source_file": "electron/ui/src/components/Settings.jsx",
+      "source_location": "L4",
+      "_origin": "ast"
+    },
+    {
+      "id": "electron_ui_src_hooks_usewebsocket_usewebsocket",
+      "label": "useWebSocket",
+      "file_type": "code",
+      "source_file": "electron/ui/src/hooks/useWebSocket.js",
+      "source_location": "L8",
+      "_origin": "ast"
+    }
+  ],
+  "edges": [
+    {
+      "source": "electron_ui_src_app",
+      "target": "electron_ui_src_components_adddownload_adddownload",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/App.jsx",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_app",
+      "target": "electron_ui_src_components_settings_settings",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/App.jsx",
+      "source_location": "L7",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_app",
+      "target": "electron_ui_src_hooks_usewebsocket_usewebsocket",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/App.jsx",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_app",
+      "target": "electron_ui_src_api_getdownloads",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/App.jsx",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_app",
+      "target": "electron_ui_src_api_getstats",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/App.jsx",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_adddownload",
+      "target": "electron_ui_src_api_adddownload",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/AddDownload.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_pausedownload",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_resumedownload",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_canceldownload",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_deletedownload",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_openfolder",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_formatbytes",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_formatspeed",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_downloadlist",
+      "target": "electron_ui_src_api_formateta",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_header",
+      "target": "electron_ui_src_api_formatspeed",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/Header.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_settings",
+      "target": "electron_ui_src_api_getsettings",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/Settings.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_settings",
+      "target": "electron_ui_src_api_updatesettings",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/Settings.jsx",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_sidebar",
+      "target": "electron_ui_src_api_formatspeed",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/Sidebar.jsx",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_components_speedgraph",
+      "target": "electron_ui_src_api_formatspeed",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/SpeedGraph.jsx",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_hooks_usewebsocket",
+      "target": "electron_ui_src_api_getwebsocketurl",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/hooks/useWebSocket.js",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "electron_ui_src_main",
+      "target": "electron_ui_src_app_app",
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/main.jsx",
+      "source_location": "L3",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_pausedownload",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L37",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_resumedownload",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L40",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_canceldownload",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_deletedownload",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L46",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_formatbytes",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L84",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_openfolder",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L119",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_formatspeed",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L177",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_downloadlist_downloaditem",
+      "target": "electron_ui_src_api_formateta",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/DownloadList.jsx",
+      "source_location": "L179",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_header_header",
+      "target": "electron_ui_src_api_formatspeed",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/Header.jsx",
+      "source_location": "L33",
+      "weight": 1.0,
+      "_origin": "ast"
+    },
+    {
+      "source": "d_idmm_electron_ui_src_components_speedgraph_speedgraph",
+      "target": "electron_ui_src_api_formatspeed",
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "electron/ui/src/components/SpeedGraph.jsx",
+      "source_location": "L40",
+      "weight": 1.0,
+      "_origin": "ast"
+    }
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

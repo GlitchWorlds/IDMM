@@ -1,0 +1,182 @@
+{
+  "app/deep-test.js": {
+    "mtime": 1784511619.198354,
+    "ast_hash": "44b5929135854a6daed5d1f599660841",
+    "semantic_hash": "44b5929135854a6daed5d1f599660841"
+  },
+  "app/main.js": {
+    "mtime": 1784788482.214315,
+    "ast_hash": "3dab16a43858a3942c0ef3912d3a8a2b",
+    "semantic_hash": "3dab16a43858a3942c0ef3912d3a8a2b"
+  },
+  "app/package.json": {
+    "mtime": 1784442813.53984,
+    "ast_hash": "f18acec30bde3a85cc0a3e1831906e8c",
+    "semantic_hash": "f18acec30bde3a85cc0a3e1831906e8c"
+  },
+  "app/src/db/sqlite.js": {
+    "mtime": 1784787548.9915745,
+    "ast_hash": "d90dbcaedcaf804a719b416121f8c4e4",
+    "semantic_hash": "d90dbcaedcaf804a719b416121f8c4e4"
+  },
+  "app/src/engine/chunk-worker.js": {
+    "mtime": 1784511619.1614187,
+    "ast_hash": "a1cbdd779ba4313a3cbc5c3a1a68093e",
+    "semantic_hash": "a1cbdd779ba4313a3cbc5c3a1a68093e"
+  },
+  "app/src/engine/downloader.js": {
+    "mtime": 1784793173.1690018,
+    "ast_hash": "1dd5ebe992a73f097595280c2aebefbf",
+    "semantic_hash": "1dd5ebe992a73f097595280c2aebefbf"
+  },
+  "app/src/engine/merge.js": {
+    "mtime": 1784511619.1754794,
+    "ast_hash": "af9f7d69a67a05df0d926ed2e2d1d6cd",
+    "semantic_hash": "af9f7d69a67a05df0d926ed2e2d1d6cd"
+  },
+  "app/src/engine/resume.js": {
+    "mtime": 1784792811.594459,
+    "ast_hash": "d45fd70ac50657f189715b0321c33424",
+    "semantic_hash": "d45fd70ac50657f189715b0321c33424"
+  },
+  "app/src/server/server.js": {
+    "mtime": 1784794127.3460512,
+    "ast_hash": "9c856f4a63ce7cf792667ff28ee75959",
+    "semantic_hash": "9c856f4a63ce7cf792667ff28ee75959"
+  },
+  "app/src/utils/filename.js": {
+    "mtime": 1784442813.5450914,
+    "ast_hash": "e3b194d45a0714a61417d5bd76ebb9cc",
+    "semantic_hash": "e3b194d45a0714a61417d5bd76ebb9cc"
+  },
+  "app/src/utils/hash.js": {
+    "mtime": 1784442813.5450914,
+    "ast_hash": "850181dcca62c57166762a57a51a3842",
+    "semantic_hash": "850181dcca62c57166762a57a51a3842"
+  },
+  "app/src/utils/mime.js": {
+    "mtime": 1784511619.1885965,
+    "ast_hash": "d6a87f4d44ff8c3d10667fd8dd0cdb68",
+    "semantic_hash": "d6a87f4d44ff8c3d10667fd8dd0cdb68"
+  },
+  "app/src/utils/ssrf.js": {
+    "mtime": 1784511619.1923344,
+    "ast_hash": "df5e3c0152fbb558035506da711b54e0",
+    "semantic_hash": "df5e3c0152fbb558035506da711b54e0"
+  },
+  "app/test.js": {
+    "mtime": 1784511619.206375,
+    "ast_hash": "53e1d4a0d7fc8dbefea8d5bcd75acd28",
+    "semantic_hash": "53e1d4a0d7fc8dbefea8d5bcd75acd28"
+  },
+  "electron/generate-icons.js": {
+    "mtime": 1784442813.5555084,
+    "ast_hash": "6465a9ac6c031d5041b7d35e10f3c709",
+    "semantic_hash": "6465a9ac6c031d5041b7d35e10f3c709"
+  },
+  "electron/main.js": {
+    "mtime": 1784687580.8358216,
+    "ast_hash": "fae63eb9d8a716b66099ae9d87866025",
+    "semantic_hash": "fae63eb9d8a716b66099ae9d87866025"
+  },
+  "electron/package.json": {
+    "mtime": 1784704946.0684412,
+    "ast_hash": "8a3b73e27b250d147593fabadb0d0f8b",
+    "semantic_hash": "8a3b73e27b250d147593fabadb0d0f8b"
+  },
+  "electron/preload.js": {
+    "mtime": 1784687569.9994872,
+    "ast_hash": "ffadded235f0af76013ebb998d7f2110",
+    "semantic_hash": "ffadded235f0af76013ebb998d7f2110"
+  },
+  "electron/ui/package.json": {
+    "mtime": 1784442813.5555084,
+    "ast_hash": "4cfad682c1a7b2a0c335f33eb67c84a4",
+    "semantic_hash": "4cfad682c1a7b2a0c335f33eb67c84a4"
+  },
+  "electron/ui/src/App.jsx": {
+    "mtime": 1784540832.670432,
+    "ast_hash": "59fd5bc0baafa35db7802c7302f0a100",
+    "semantic_hash": "59fd5bc0baafa35db7802c7302f0a100"
+  },
+  "electron/ui/src/api.js": {
+    "mtime": 1784519501.9366844,
+    "ast_hash": "de9a4dcde3a7767b6d1353c60983418f",
+    "semantic_hash": "de9a4dcde3a7767b6d1353c60983418f"
+  },
+  "electron/ui/src/components/AddDownload.jsx": {
+    "mtime": 1784687691.3232093,
+    "ast_hash": "f53793a8414d2a3add8f5c3585a2871f",
+    "semantic_hash": "f53793a8414d2a3add8f5c3585a2871f"
+  },
+  "electron/ui/src/components/DownloadList.jsx": {
+    "mtime": 1784537259.626196,
+    "ast_hash": "3a1119a0a88d8c775ea5d8012be3637d",
+    "semantic_hash": "3a1119a0a88d8c775ea5d8012be3637d"
+  },
+  "electron/ui/src/components/Header.jsx": {
+    "mtime": 1784531953.0690553,
+    "ast_hash": "3fb07c9fa291cc0aeeccc2386bff545a",
+    "semantic_hash": "3fb07c9fa291cc0aeeccc2386bff545a"
+  },
+  "electron/ui/src/components/Settings.jsx": {
+    "mtime": 1784687699.9570003,
+    "ast_hash": "6081ac373aafabdbf423831f9ec3a891",
+    "semantic_hash": "6081ac373aafabdbf423831f9ec3a891"
+  },
+  "electron/ui/src/components/Sidebar.jsx": {
+    "mtime": 1784540822.5962725,
+    "ast_hash": "21bfa9ec7bc467a698edca9199bfbe8b",
+    "semantic_hash": "21bfa9ec7bc467a698edca9199bfbe8b"
+  },
+  "electron/ui/src/components/SpeedGraph.jsx": {
+    "mtime": 1784442813.5668607,
+    "ast_hash": "35f713b6f4f45fe9e8f7c71aac38f620",
+    "semantic_hash": "35f713b6f4f45fe9e8f7c71aac38f620"
+  },
+  "electron/ui/src/hooks/useWebSocket.js": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "053fee912e53aadef24618449671834f",
+    "semantic_hash": "053fee912e53aadef24618449671834f"
+  },
+  "electron/ui/src/main.jsx": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "cdd82b768936c02c7313ac2fa5218f43",
+    "semantic_hash": "cdd82b768936c02c7313ac2fa5218f43"
+  },
+  "electron/ui/vite.config.js": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "a5546f8007224451be9c63b0def2ed97",
+    "semantic_hash": "a5546f8007224451be9c63b0def2ed97"
+  },
+  "extension/background.js": {
+    "mtime": 1784792847.5495636,
+    "ast_hash": "4742e05e7466e2531bb7acfe6a65dcaf",
+    "semantic_hash": "4742e05e7466e2531bb7acfe6a65dcaf"
+  },
+  "extension/content.js": {
+    "mtime": 1784792832.924989,
+    "ast_hash": "f709baec3cc9d5895b6bd4adde6f056c",
+    "semantic_hash": "f709baec3cc9d5895b6bd4adde6f056c"
+  },
+  "extension/lib/api-client.js": {
+    "mtime": 1784511619.2284853,
+    "ast_hash": "2453ebb534cbccffc5a3910661cc2e0a",
+    "semantic_hash": "2453ebb534cbccffc5a3910661cc2e0a"
+  },
+  "extension/manifest.json": {
+    "mtime": 1784539587.2913308,
+    "ast_hash": "f3fbd010961c75ceaaa5cb4e8c0f38df",
+    "semantic_hash": "f3fbd010961c75ceaaa5cb4e8c0f38df"
+  },
+  "patch.js": {
+    "mtime": 1784485787.9656613,
+    "ast_hash": "2d43dd15231d629d4448ffea99ee0dd0",
+    "semantic_hash": "2d43dd15231d629d4448ffea99ee0dd0"
+  },
+  "app/test/integration.test.js": {
+    "mtime": 1784793905.7613502,
+    "ast_hash": "c12d80b4770c3167e5a92357d5caf271",
+    "semantic_hash": "c12d80b4770c3167e5a92357d5caf271"
+  }
+}

@@ -183,6 +183,7 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
 
   if (sent) {
     // Intercept successful!
+    interceptedIds.delete(item.id); // Clean up tracking
     // We MUST call cancel asynchronously to prevent Chrome from 
     // resuming the default browser download when we call suggest.
     setTimeout(() => {
@@ -274,6 +275,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 //  Polling for Active Downloads 
+
+// E11: Periodic cleanup of interceptedIds to prevent memory leak
+setInterval(() => {
+  if (interceptedIds.size > 100) interceptedIds.clear();
+}, 60000);
 
 async function pollDownloads() {
   if (!serverOnline) return;

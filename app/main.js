@@ -78,11 +78,12 @@ async function main() {
   console.log(`[IDMM] Database: ${DB_PATH}`);
 
   // 2. Load settings
-  const settings = db.getAllSettings();
-  if (!settings || settings.ok === false) {
-    console.error('[IDMM] Failed to load settings:', settings && settings.error);
+  const settingsResult = db.getAllSettings();
+  if (!settingsResult.ok) {
+    console.error('[IDMM] Failed to load settings:', settingsResult.error);
     process.exit(1);
   }
+  const settings = settingsResult.data;
   console.log(`[IDMM] Settings loaded (${Object.keys(settings).length} keys)`);
 
   // 3. Initialize download manager
@@ -104,12 +105,12 @@ async function main() {
 
   // 4. Auto-resume paused downloads if requested
   if (autoResume) {
-    const resumable = db.getResumableDownloads();
-    if (!Array.isArray(resumable)) {
-      console.error('[IDMM] Failed to get resumable downloads:', resumable && resumable.error);
-    } else if (resumable.length > 0) {
-      console.log(`[IDMM] Found ${resumable.length} resumable download(s)`);
-      for (const dl of resumable) {
+    const resumableResult = db.getResumableDownloads();
+    if (!resumableResult.ok) {
+      console.error('[IDMM] Failed to get resumable downloads:', resumableResult.error);
+    } else if (resumableResult.data && resumableResult.data.length > 0) {
+      console.log(`[IDMM] Found ${resumableResult.data.length} resumable download(s)`);
+      for (const dl of resumableResult.data) {
         try {
           console.log(`[IDMM] Resuming: ${dl.filename}`);
           await downloader.resumeDownload(dl.id);

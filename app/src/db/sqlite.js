@@ -3,12 +3,14 @@
 const initSqlJs = require('sql.js');
 const path = require('node:path');
 const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 
 /**
  * IDMM SQLite Database Layer.
- * Uses sql.js (WASM-based SQLite)  no native compilation required.
+ * Uses sql.js (WASM-based SQLite) — no native compilation required.
  *
- * Since sql.js init is async, use IDMMDatabase.create(dbPath) factory.
+ * All public methods return { ok: boolean, data?: any, error?: string }.
+ * Use IDMMDatabase.create(dbPath) async factory.
  */
 
 class IDMMDatabase {
@@ -34,21 +36,21 @@ class IDMMDatabase {
   }
 
   /**
-   * Async factory  creates and initializes the database.
+   * Async factory — creates and initializes the database.
    * @param {string} dbPath - Path to the SQLite database file
    * @returns {Promise<IDMMDatabase>}
    */
   static async create(dbPath) {
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      await fsp.mkdir(dir, { recursive: true });
     }
 
     const SQL = await initSqlJs();
     let db;
 
     if (fs.existsSync(dbPath)) {
-      const fileBuffer = fs.readFileSync(dbPath);
+      const fileBuffer = await fsp.readFile(dbPath);
       db = new SQL.Database(fileBuffer);
     } else {
       db = new SQL.Database();
@@ -59,7 +61,6 @@ class IDMMDatabase {
 
   /**
    * Check whether the underlying sql.js Database instance is still usable.
-   * Returns true if db reference exists, false otherwise.
    */
   isConnected() {
     try {
@@ -87,16 +88,12 @@ class IDMMDatabase {
     this._dirty = true;
   }
 
-  //  sql.js query helpers 
+  // ── sql.js query helpers ──
 
-  /**
-   * Execute SQL that returns rows. Returns array of row objects.
-   */
   _query(sql, params = []) {
     try {
       const stmt = this.db.prepare(sql);
       if (params.length > 0) stmt.bind(params);
-
       const rows = [];
       while (stmt.step()) {
         rows.push(stmt.getAsObject());
@@ -105,21 +102,15 @@ class IDMMDatabase {
       return rows;
     } catch (err) {
       console.error('[DB] Query error:', sql, err.message);
-      return [];
+      throw err;
     }
   }
 
-  /**
-   * Execute SQL that returns a single row.
-   */
   _queryOne(sql, params = []) {
     const rows = this._query(sql, params);
     return rows.length > 0 ? rows[0] : null;
   }
 
-  /**
-   * Execute SQL that modifies data (INSERT/UPDATE/DELETE).
-   */
   _run(sql, params = []) {
     try {
       this.db.run(sql, params);
@@ -130,7 +121,7 @@ class IDMMDatabase {
     }
   }
 
-  //  Table Init 
+  // ── Table Init ──
 
   _initTables() {
     this.db.run(`
@@ -181,7 +172,6 @@ class IDMMDatabase {
       );
     `);
 
-    // Indexes
     this.db.run('CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);');
     this.db.run('CREATE INDEX IF NOT EXISTS idx_chunks_download_id ON chunks(download_id);');
   }
@@ -216,16 +206,13 @@ class IDMMDatabase {
     }
   }
 
-  //  Gap 2: Safe error message (no internal path leak)
-
   _safeError(err) {
     if (!err) return 'Unknown database error';
     const msg = err.message || String(err);
-    // Strip absolute paths to avoid leaking internal structure
     return msg.replace(/\\[^\\]+\\/g, '.../').replace(/\/[^\/]+\//g, '.../');
   }
 
-  //  Download Operations 
+  // ── Download Operations ──
 
   createDownload(download) {
     try {
@@ -247,7 +234,8 @@ class IDMMDatabase {
           download.status || 'pending',
         ]
       );
-      return this.getDownload(download.id);
+      const result = this.getDownload(download.id);
+      return result.ok ? { ok: true, data: result.data } : { ok: false, error: 'Failed to read created download' };
     } catch (err) {
       console.error('[DB] createDownload error:', err.message);
       return { ok: false, error: 'Failed to create download record' };
@@ -260,7 +248,7 @@ class IDMMDatabase {
       if (row) {
         row.headers = row.headers ? JSON.parse(row.headers) : null;
       }
-      return row;
+      return { ok: true, data: row };
     } catch (err) {
       console.error('[DB] getDownload error:', err.message);
       return { ok: false, error: 'Failed to retrieve download' };
@@ -278,10 +266,11 @@ class IDMMDatabase {
       } else {
         rows = this._query('SELECT * FROM downloads ORDER BY created_at DESC');
       }
-      return rows.map(row => {
+      rows = rows.map(row => {
         row.headers = row.headers ? JSON.parse(row.headers) : null;
         return row;
       });
+      return { ok: true, data: rows };
     } catch (err) {
       console.error('[DB] listDownloads error:', err.message);
       return { ok: false, error: 'Failed to list downloads' };
@@ -309,12 +298,13 @@ class IDMMDatabase {
         }
       }
 
-      if (updates.length === 0) return;
+      if (updates.length === 0) return { ok: true };
 
       updates.push("updated_at = datetime('now')");
       values.push(id);
 
       this._run(`UPDATE downloads SET ${updates.join(', ')} WHERE id = ?`, values);
+      return { ok: true };
     } catch (err) {
       console.error('[DB] updateDownload error:', err.message);
       return { ok: false, error: 'Failed to update download' };
@@ -323,16 +313,16 @@ class IDMMDatabase {
 
   deleteDownload(id) {
     try {
-      // Delete chunks first (foreign key)
       this._run('DELETE FROM chunks WHERE download_id = ?', [id]);
       this._run('DELETE FROM downloads WHERE id = ?', [id]);
+      return { ok: true };
     } catch (err) {
       console.error('[DB] deleteDownload error:', err.message);
       return { ok: false, error: 'Failed to delete download' };
     }
   }
 
-  //  Chunk Operations 
+  // ── Chunk Operations ──
 
   createChunks(downloadId, chunks) {
     try {
@@ -343,6 +333,7 @@ class IDMMDatabase {
           [downloadId, chunk.index, chunk.start, chunk.end]
         );
       }
+      return { ok: true };
     } catch (err) {
       console.error('[DB] createChunks error:', err.message);
       return { ok: false, error: 'Failed to create chunk records' };
@@ -351,10 +342,11 @@ class IDMMDatabase {
 
   getChunks(downloadId) {
     try {
-      return this._query(
+      const rows = this._query(
         'SELECT * FROM chunks WHERE download_id = ? ORDER BY chunk_index ASC',
         [downloadId]
       );
+      return { ok: true, data: rows };
     } catch (err) {
       console.error('[DB] getChunks error:', err.message);
       return { ok: false, error: 'Failed to retrieve chunks' };
@@ -375,10 +367,11 @@ class IDMMDatabase {
         }
       }
 
-      if (updates.length === 0) return;
+      if (updates.length === 0) return { ok: true };
 
       values.push(chunkId);
       this._run(`UPDATE chunks SET ${updates.join(', ')} WHERE id = ?`, values);
+      return { ok: true };
     } catch (err) {
       console.error('[DB] updateChunk error:', err.message);
       return { ok: false, error: 'Failed to update chunk' };
@@ -387,24 +380,27 @@ class IDMMDatabase {
 
   getDownloadWithChunks(id) {
     try {
-      const download = this.getDownload(id);
-      if (!download) return null;
-      // If getDownload returned an error object, propagate it
-      if (download.ok === false) return download;
-      download.chunks = this.getChunks(id);
-      return download;
+      const dlResult = this.getDownload(id);
+      if (!dlResult.ok) return dlResult;
+      if (!dlResult.data) return { ok: true, data: null };
+
+      const chunksResult = this.getChunks(id);
+      if (!chunksResult.ok) return { ok: false, error: chunksResult.error };
+
+      dlResult.data.chunks = chunksResult.data || [];
+      return { ok: true, data: dlResult.data };
     } catch (err) {
       console.error('[DB] getDownloadWithChunks error:', err.message);
       return { ok: false, error: 'Failed to retrieve download with chunks' };
     }
   }
 
-  //  Settings Operations 
+  // ── Settings Operations ──
 
   getSetting(key) {
     try {
       const row = this._queryOne('SELECT value FROM settings WHERE key = ?', [key]);
-      return row ? row.value : null;
+      return { ok: true, data: row ? row.value : null };
     } catch (err) {
       console.error('[DB] getSetting error:', err.message);
       return { ok: false, error: 'Failed to retrieve setting' };
@@ -412,14 +408,9 @@ class IDMMDatabase {
   }
 
   getSettingInt(key, defaultValue = 0) {
-    try {
-      const val = this.getSetting(key);
-      if (val && val.ok === false) return defaultValue;
-      return val !== null ? parseInt(val, 10) : defaultValue;
-    } catch (err) {
-      console.error('[DB] getSettingInt error:', err.message);
-      return defaultValue;
-    }
+    const result = this.getSetting(key);
+    if (!result.ok) return defaultValue;
+    return result.data !== null ? parseInt(result.data, 10) : defaultValue;
   }
 
   getAllSettings() {
@@ -429,7 +420,7 @@ class IDMMDatabase {
       for (const row of rows) {
         settings[row.key] = row.value;
       }
-      return settings;
+      return { ok: true, data: settings };
     } catch (err) {
       console.error('[DB] getAllSettings error:', err.message);
       return { ok: false, error: 'Failed to retrieve settings' };
@@ -442,6 +433,7 @@ class IDMMDatabase {
         "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
         [key, String(value)]
       );
+      return { ok: true };
     } catch (err) {
       console.error('[DB] setSetting error:', err.message);
       return { ok: false, error: 'Failed to save setting' };
@@ -451,15 +443,17 @@ class IDMMDatabase {
   updateSettings(settings) {
     try {
       for (const [key, value] of Object.entries(settings)) {
-        this.setSetting(key, value);
+        const result = this.setSetting(key, value);
+        if (!result.ok) return result;
       }
+      return { ok: true };
     } catch (err) {
       console.error('[DB] updateSettings error:', err.message);
       return { ok: false, error: 'Failed to update settings' };
     }
   }
 
-  //  Statistics 
+  // ── Statistics ──
 
   getStats() {
     try {
@@ -471,12 +465,15 @@ class IDMMDatabase {
       const totalBytes = this._queryOne('SELECT COALESCE(SUM(downloaded), 0) as total FROM downloads');
 
       return {
-        total_downloads: total ? total.count : 0,
-        completed: completed ? completed.count : 0,
-        active: active ? active.count : 0,
-        paused: paused ? paused.count : 0,
-        failed: failed ? failed.count : 0,
-        total_bytes_downloaded: totalBytes ? totalBytes.total : 0,
+        ok: true,
+        data: {
+          total_downloads: total ? total.count : 0,
+          completed: completed ? completed.count : 0,
+          active: active ? active.count : 0,
+          paused: paused ? paused.count : 0,
+          failed: failed ? failed.count : 0,
+          total_bytes_downloaded: totalBytes ? totalBytes.total : 0,
+        }
       };
     } catch (err) {
       console.error('[DB] getStats error:', err.message);
@@ -489,11 +486,13 @@ class IDMMDatabase {
       const rows = this._query(
         "SELECT * FROM downloads WHERE status IN ('downloading', 'paused', 'pending')"
       );
-      return rows.map(row => {
+      const result = rows.map(row => {
         row.headers = row.headers ? JSON.parse(row.headers) : null;
-        row.chunks = this.getChunks(row.id);
+        const chunksResult = this.getChunks(row.id);
+        row.chunks = chunksResult.ok ? (chunksResult.data || []) : [];
         return row;
       });
+      return { ok: true, data: result };
     } catch (err) {
       console.error('[DB] getResumableDownloads error:', err.message);
       return { ok: false, error: 'Failed to retrieve resumable downloads' };
@@ -507,11 +506,12 @@ class IDMMDatabase {
       }
       this.save();
       this.db.close();
+      return { ok: true };
     } catch (err) {
       console.error('[DB] close error:', err.message);
+      return { ok: false, error: 'Failed to close database' };
     }
   }
 }
 
 module.exports = IDMMDatabase;
-

@@ -1,14 +1,17 @@
 'use strict';
 
 const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 /**
  * IDMM Resume Manager.
  *
  * Dual persistence: saves download state to download.json files alongside
- * the SQLite database. This provides resilience  if the DB is corrupted
+ * the SQLite database. This provides resilience — if the DB is corrupted
  * or the process crashes, we can reconstruct state from the JSON files.
+ *
+ * Fix #3: All I/O methods are now async (fs.promises).
  */
 
 class ResumeManager {
@@ -17,10 +20,10 @@ class ResumeManager {
    */
   constructor(tempDir) {
     this.tempDir = tempDir;
-    this._ensureDir(tempDir);
+    this._ensureDirSync(tempDir);
   }
 
-  _ensureDir(dir) {
+  _ensureDirSync(dir) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -56,11 +59,12 @@ class ResumeManager {
   }
 
   /**
-   * Save download state to download.json.
+   * Save download state to download.json (async).
    * @param {Object} state - Download state object
+   * @returns {Promise<Object>} The saved data object
    */
-  saveState(state) {
-    // F12: Cancel any pending debounced save for this download  direct save supersedes
+  async saveState(state) {
+    // Cancel any pending debounced save for this download — direct save supersedes
     if (this._pendingTimers && this._pendingTimers[state.id]) {
       clearTimeout(this._pendingTimers[state.id]);
       delete this._pendingTimers[state.id];
@@ -68,7 +72,7 @@ class ResumeManager {
     }
 
     const dir = this.getDownloadTempDir(state.id);
-    this._ensureDir(dir);
+    await fsp.mkdir(dir, { recursive: true });
 
     const filePath = this.getStateFilePath(state.id);
     const data = {
@@ -97,21 +101,19 @@ class ResumeManager {
       _throttleCount: state._throttleCount || 0,
     };
 
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    await fsp.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
     return data;
   }
 
   /**
-   * Load download state from download.json.
+   * Load download state from download.json (async).
    * @param {string} downloadId
-   * @returns {Object|null}
+   * @returns {Promise<Object|null>}
    */
-  loadState(downloadId) {
+  async loadState(downloadId) {
     const filePath = this.getStateFilePath(downloadId);
-    if (!fs.existsSync(filePath)) return null;
-
     try {
-      const raw = fs.readFileSync(filePath, 'utf-8');
+      const raw = await fsp.readFile(filePath, 'utf-8');
       return JSON.parse(raw);
     } catch {
       return null;
@@ -119,12 +121,12 @@ class ResumeManager {
   }
 
   /**
-   * Validate chunk integrity  check if .part file sizes match expected bytes.
+   * Validate chunk integrity — check if .part file sizes match expected bytes (async).
    * @param {string} downloadId
    * @param {Object[]} chunks - Chunk descriptors from state
-   * @returns {{ valid: boolean, chunks: Object[] }} Validated chunks with actual sizes
+   * @returns {Promise<{ valid: boolean, chunks: Object[] }>}
    */
-  validateChunks(downloadId, chunks) {
+  async validateChunks(downloadId, chunks) {
     let allValid = true;
     const validated = [];
 
@@ -132,19 +134,8 @@ class ResumeManager {
       const chunkPath = this.getChunkPath(downloadId, chunk.index);
       const expectedSize = chunk.end - chunk.start + 1;
 
-      if (!fs.existsSync(chunkPath)) {
-        validated.push({
-          ...chunk,
-          actualSize: 0,
-          valid: false,
-          needsResume: true,
-        });
-        allValid = false;
-        continue;
-      }
-
       try {
-        const stat = fs.statSync(chunkPath);
+        const stat = await fsp.stat(chunkPath);
         const actualSize = stat.size;
         const isValid = actualSize <= expectedSize;
 
@@ -156,9 +147,7 @@ class ResumeManager {
           needsResume: actualSize < expectedSize,
         });
 
-        if (!isValid) {
-          allValid = false;
-        }
+        if (!isValid) allValid = false;
       } catch {
         validated.push({
           ...chunk,
@@ -174,37 +163,33 @@ class ResumeManager {
   }
 
   /**
-   * Delete all temp files for a download.
+   * Delete all temp files for a download (async).
    * @param {string} downloadId
    */
-  cleanup(downloadId) {
+  async cleanup(downloadId) {
     const dir = this.getDownloadTempDir(downloadId);
-    if (!fs.existsSync(dir)) return;
-
     try {
-      const files = fs.readdirSync(dir);
+      const files = await fsp.readdir(dir);
       for (const file of files) {
-        fs.unlinkSync(path.join(dir, file));
+        await fsp.unlink(path.join(dir, file));
       }
-      fs.rmdirSync(dir);
+      await fsp.rmdir(dir);
     } catch {
       // Best effort cleanup
     }
   }
 
   /**
-   * Delete chunk .part files only (keep download.json for possible re-resume).
+   * Delete chunk .part files only (keep download.json) (async).
    * @param {string} downloadId
    */
-  cleanupChunks(downloadId) {
+  async cleanupChunks(downloadId) {
     const dir = this.getDownloadTempDir(downloadId);
-    if (!fs.existsSync(dir)) return;
-
     try {
-      const files = fs.readdirSync(dir);
+      const files = await fsp.readdir(dir);
       for (const file of files) {
         if (file.endsWith('.part')) {
-          fs.unlinkSync(path.join(dir, file));
+          await fsp.unlink(path.join(dir, file));
         }
       }
     } catch {
@@ -213,18 +198,20 @@ class ResumeManager {
   }
 
   /**
-   * Find all download IDs that have state files (for recovery on startup).
-   * @returns {string[]} Array of download IDs
+   * Find all download IDs that have state files (async).
+   * @returns {Promise<string[]>}
    */
-  findAllStateFiles() {
-    if (!fs.existsSync(this.tempDir)) return [];
-
+  async findAllStateFiles() {
     try {
-      const entries = fs.readdirSync(this.tempDir, { withFileTypes: true });
-      return entries
-        .filter(e => e.isDirectory())
-        .map(e => e.name)
-        .filter(id => fs.existsSync(this.getStateFilePath(id)));
+      const entries = await fsp.readdir(this.tempDir, { withFileTypes: true });
+      const result = [];
+      for (const e of entries) {
+        if (e.isDirectory()) {
+          const statePath = this.getStateFilePath(e.name);
+          if (fs.existsSync(statePath)) result.push(e.name);
+        }
+      }
+      return result;
     } catch {
       return [];
     }
@@ -232,13 +219,12 @@ class ResumeManager {
 
   /**
    * Update a single chunk's state within the download.json.
-   * Debounced: at most one file write per 500ms per download (F12).
+   * Debounced: at most one file write per 500ms per download.
    * @param {string} downloadId
    * @param {number} chunkIndex
    * @param {Object} updates - { downloaded, status }
    */
   updateChunkState(downloadId, chunkIndex, updates) {
-    // F12: Accumulate pending updates in-memory and flush on a 500ms debounce
     if (!this._pendingUpdates) this._pendingUpdates = {};
     if (!this._pendingTimers) this._pendingTimers = {};
 
@@ -255,30 +241,38 @@ class ResumeManager {
         if (!pending) return;
         delete this._pendingUpdates[key];
 
-        const state = this.loadState(downloadId);
-        if (!state || !state.chunks) return;
-
-        for (const [idx, upd] of Object.entries(pending)) {
-          const chunk = state.chunks.find(c => c.index === parseInt(idx, 10));
-          if (!chunk) continue;
-          if (upd.downloaded !== undefined) chunk.downloaded = upd.downloaded;
-          if (upd.status !== undefined) chunk.status = upd.status;
-        }
-
-        this.saveState(state);
+        // Async flush — fire and forget (errors logged internally)
+        this._flushSingleDownload(downloadId, pending).catch(err => {
+          console.error('[Resume] Debounced flush error:', err.message);
+        });
       }, 500);
     }
+  }
+
+  /**
+   * Flush pending updates for a single download (async, internal).
+   * @param {string} downloadId
+   * @param {Object} pending - { [chunkIndex]: updates }
+   */
+  async _flushSingleDownload(downloadId, pending) {
+    const state = await this.loadState(downloadId);
+    if (!state || !state.chunks) return;
+
+    for (const [idx, upd] of Object.entries(pending)) {
+      const chunk = state.chunks.find(c => c.index === parseInt(idx, 10));
+      if (!chunk) continue;
+      if (upd.downloaded !== undefined) chunk.downloaded = upd.downloaded;
+      if (upd.status !== undefined) chunk.status = upd.status;
+    }
+
+    await this.saveState(state);
   }
 
   /**
    * Flush all pending debounced updates immediately.
    * Call before pause/cancel/shutdown to avoid losing state.
    */
-  flushPending() {
-    // AW2: Re-entrancy guard  flushPending() can be called while a
-    // debounced saveState() callback is already running inside the same
-    // tick (e.g. via _flushChunkState  saveState).  Prevent infinite
-    // recursion by bailing out if we are already mid-flush.
+  async flushPending() {
     if (this._flushing) return;
     this._flushing = true;
 
@@ -291,23 +285,16 @@ class ResumeManager {
     for (const [downloadId, pending] of Object.entries(this._pendingUpdates)) {
       if (!pending) continue;
       delete this._pendingUpdates[downloadId];
-
-      const state = this.loadState(downloadId);
-      if (!state || !state.chunks) continue;
-
-      for (const [idx, upd] of Object.entries(pending)) {
-        const chunk = state.chunks.find(c => c.index === parseInt(idx, 10));
-        if (!chunk) continue;
-        if (upd.downloaded !== undefined) chunk.downloaded = upd.downloaded;
-        if (upd.status !== undefined) chunk.status = upd.status;
+      try {
+        await this._flushSingleDownload(downloadId, pending);
+      } catch (err) {
+        console.error('[Resume] flushPending error:', err.message);
       }
-
-      this.saveState(state);
     }
     this._flushing = false;
   }
 
-  // --- Gap 2: ResumeManager → DownloadManager visibility ---
+  // ── Gap 2: ResumeManager → DownloadManager visibility ──
 
   /**
    * Restore all resumable downloads by querying the DB and resuming each one
@@ -315,30 +302,26 @@ class ResumeManager {
    * ResumeManager → DownloadManager in the dependency graph.
    *
    * @param {Object} db - IDMMDatabase instance
-   * @param {Object} [downloadManager] - Optional DownloadManager instance (uses lazy import if omitted)
+   * @param {Object} downloadManager - DownloadManager instance (REQUIRED)
    * @returns {Promise<{resumed: string[], failed: Array<{id: string, error: string}>}>}
    */
   async restoreDownloads(db, downloadManager) {
-    const DM = downloadManager || new (_getDownloadManager())({
-      db,
-      tempDir: this.tempDir,
-      settings: {},
-    });
+    if (!downloadManager) throw new Error('downloadManager is required');
 
-    const resumable = db.getResumableDownloads();
+    const resumableResult = db.getResumableDownloads();
+    if (!resumableResult.ok) {
+      return { resumed: [], failed: [{ id: 'N/A', error: resumableResult.error }] };
+    }
+
+    const resumable = resumableResult.data || [];
     const resumed = [];
     const failed = [];
 
-    if (!Array.isArray(resumable) || resumable.length === 0) {
-      return { resumed, failed };
-    }
-
     for (const dl of resumable) {
-      // Skip downloads that are already active or completed
       if (dl.status === 'completed' || dl.status === 'cancelled') continue;
 
       try {
-        await DM.resumeDownload(dl.id);
+        await downloadManager.resumeDownload(dl.id);
         resumed.push(dl.id);
       } catch (err) {
         failed.push({ id: dl.id, error: err.message });
@@ -350,13 +333,3 @@ class ResumeManager {
 }
 
 module.exports = ResumeManager;
-
-// Lazy import to avoid circular dependency at module load time
-let _DownloadManager = null;
-function _getDownloadManager() {
-  if (!_DownloadManager) {
-    _DownloadManager = require('./downloader');
-  }
-  return _DownloadManager;
-}
-

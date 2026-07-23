@@ -54,10 +54,11 @@ let downloader = null;
 async function startServer() {
   console.log('[IDMM] Starting server...');
   db = await IDMMDatabase.create(DB_PATH);
+  const settingsResult = db.getAllSettings();
   downloader = new DownloadManager({
     db,
     tempDir: TEMP_DIR,
-    settings: db.getAllSettings(),
+    settings: settingsResult.ok ? settingsResult.data : {},
   });
   server = new IDMMServer({ db, downloader });
   await server.start();
@@ -86,9 +87,9 @@ function createWindow() {
     },
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      nodeIntegration: true,
+      nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false
+      sandbox: true
     },
   });
 

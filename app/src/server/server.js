@@ -82,14 +82,7 @@ class IDMMServer {
         // Allow requests with no origin (curl, Postman, same-origin)
         if (!origin) return callback(null, true);
 
-        // Allow localhost variants
-        if (
-          origin.startsWith('http://localhost:') ||
-          origin.startsWith('http://127.0.0.1:') ||
-          origin.startsWith('https://localhost:') ||
-          origin.startsWith('chrome-extension://') ||
-          origin.startsWith('moz-extension://')
-        ) {
+        if (this._isAllowedOrigin(origin)) {
           return callback(null, true);
         }
 
@@ -206,8 +199,8 @@ class IDMMServer {
 
         // F1: Path traversal protection  validate save_to against allowed roots
         {
-          const defaultSavePathSetting = this.db.getSetting('default_save_path');
-          const defaultSavePath = defaultSavePathSetting && defaultSavePathSetting.ok === false ? '' : (defaultSavePathSetting || '');
+          const defaultSavePathResult = this.db.getSetting('default_save_path');
+          const defaultSavePath = (defaultSavePathResult.ok && defaultSavePathResult.data) ? defaultSavePathResult.data : '';
           const allowedRoots = new Set();
           if (defaultSavePath) allowedRoots.add(path.resolve(defaultSavePath));
           try {
@@ -232,7 +225,7 @@ class IDMMServer {
 
         // Check concurrent download limit
         const maxSetting = this.db.getSetting('max_concurrent_downloads');
-        const maxConcurrent = parseInt(maxSetting && maxSetting.ok === false ? '5' : (maxSetting || '5'), 10);
+        const maxConcurrent = (maxSetting.ok && maxSetting.data) ? parseInt(maxSetting.data, 10) : 5;
         if (this.downloader.getActiveCount() >= maxConcurrent) {
           return res.status(429).json({
             error: `Maximum concurrent downloads reached (${maxConcurrent})`,
@@ -272,10 +265,11 @@ class IDMMServer {
     this.app.get('/api/downloads', (req, res) => {
       try {
         const { status } = req.query;
-        const downloads = this.db.listDownloads(status);
-        if (!Array.isArray(downloads)) {
-          return res.status(500).json({ error: downloads.error || 'Failed to list downloads' });
+        const result = this.db.listDownloads(status);
+        if (!result.ok) {
+          return res.status(500).json({ error: result.error || 'Failed to list downloads' });
         }
+        const downloads = result.data || [];
 
         // Enrich active downloads with real-time state
         const enriched = downloads.map(d => {
@@ -418,10 +412,10 @@ class IDMMServer {
 
         // Broadcast settings change to all connected clients (extension sync)
         if (Object.keys(filtered).length > 0) {
-          const broadcastSettings = this.db.getAllSettings();
+          const broadcastResult = this.db.getAllSettings();
           this.broadcast({
             type: 'SETTINGS_CHANGED',
-            settings: broadcastSettings && broadcastSettings.ok === false ? {} : broadcastSettings,
+            settings: broadcastResult.ok ? broadcastResult.data : {},
           });
         }
 
@@ -473,7 +467,7 @@ class IDMMServer {
         if (!stats.ok) {
           return res.status(500).json({ error: stats.error || 'Failed to load stats' });
         }
-        res.json(stats);
+        res.json(stats.data);
       } catch (err) {
         res.status(500).json({ error: sanitizeError(err) });
       }

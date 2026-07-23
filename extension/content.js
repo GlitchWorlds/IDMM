@@ -1,11 +1,10 @@
 /**
- * IDMM Content Script  Page context for extracting download links.
- * Minimal footprint: only responds to messages from background.js.
+ * IDMM Content Script — Page context for extracting download links.
+ * Minimal footprint: deferred metadata reporting, capped payload.
  */
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getSelectedLinks') {
-    // Return all links on the page
     const links = Array.from(document.querySelectorAll('a[href]'))
       .map(a => ({ url: a.href, text: a.textContent?.trim() }))
       .filter(l => l.url.startsWith('http'));
@@ -24,35 +23,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ media });
   }
 
-  return true; // Keep message channel open for async response
+  return true;
 });
 
-// --- Gap 3: Proactive content → background communication ---
-// Send page metadata to background.js so it can detect downloadable content.
-(function _reportPageMetadata() {
+// --- Gap 3: Proactive content → background communication (deferred) ---
+function reportPageMetadata() {
   try {
+    const downloadLinks = Array.from(document.querySelectorAll('a[href]'))
+      .map(a => ({ url: a.href, text: (a.textContent || '').trim() }))
+      .filter(l => l.url.startsWith('http'))
+      .slice(0, 20); // Cap at 20 (was 50)
+
     const metadata = {
       type: 'PAGE_METADATA',
       pageTitle: document.title || '',
       pageUrl: window.location.href || '',
-      contentLength: document.documentElement?.innerHTML?.length || 0,
-      // Collect all <a> hrefs that look like direct download links
-      downloadLinks: Array.from(document.querySelectorAll('a[href]'))
-        .map(a => ({ url: a.href, text: (a.textContent || '').trim() }))
-        .filter(l => l.url.startsWith('http'))
-        .slice(0, 50), // Cap at 50 to avoid huge payloads
-      // Collect media elements (video/audio src)
-      mediaUrls: [
-        ...Array.from(document.querySelectorAll('video[src], video source[src]'))
-          .map(el => el.src),
-        ...Array.from(document.querySelectorAll('audio[src], audio source[src]'))
-          .map(el => el.src),
-      ].filter(u => u && u.startsWith('http')),
+      downloadLinks,
+      mediaUrls: [],
     };
+
+    // Only collect media if few links (perf heuristic)
+    if (downloadLinks.length < 5) {
+      metadata.mediaUrls = [
+        ...Array.from(document.querySelectorAll('video[src], video source[src]')).map(el => el.src),
+        ...Array.from(document.querySelectorAll('audio[src], audio source[src]')).map(el => el.src),
+      ].filter(u => u && u.startsWith('http')).slice(0, 10);
+    }
 
     chrome.runtime.sendMessage(metadata);
   } catch {
     // Content script context may be invalidated on navigation
   }
-})();
+}
 
+// Defer until DOM is idle (was document_start)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', reportPageMetadata);
+} else {
+  reportPageMetadata();
+}
