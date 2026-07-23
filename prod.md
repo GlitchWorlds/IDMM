@@ -1,6 +1,6 @@
 # Dokumentasi Produksi IDMM (Internet Download Manager Max)
 
-**Versi Terkini:** v1.2.1
+**Versi Terkini:** v1.2.3
 **Tujuan Dokumen:** *Single Source of Truth* (SSOT) untuk arsitektur, fitur, dan pedoman pengembangan proyek IDMM dan ekstensinya. Segala modifikasi di masa depan harus merujuk dan memperbarui dokumen ini.
 
 ---
@@ -19,9 +19,10 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
 - `/extension/` : Ekstensi peramban (Chrome/Edge) untuk menangkap unduhan. 
  
 ### Database & Endpoint Internal (API Lokal)
-- **SQLite Database (`idmm.db`):** Menyimpan *state* unduhan, daftar *chunk* (bagian unduhan), dan preferensi pengaturan.
+- **SQLite Database (`idmm.db`):** Menyimpan *state* unduhan, daftar *chunk* (bagian unduhan), dan preferensi pengaturan. Semua method DB mengembalikan format `{ ok: boolean, data?: any, error?: string }` untuk error handling konsisten.
 - **REST API (`http://127.0.0.1:9977`):** Menangani *start, pause, resume, cancel, delete*, serta mengembalikan daftar *history* dan *stats*.
-- **WebSocket (`ws://127.0.0.1:9977/ws`):** Mengirim *real-time progress* dan status kecepatan ke UI/Frontend.
+- **Health Endpoint (`GET /health`):** Mengembalikan status server, jumlah WebSocket clients yang terhubung, dan uptime. Digunakan untuk health check mutual antara server dan extension.
+- **WebSocket (`ws://127.0.0.1:9977/ws`):** Mengirim *real-time progress* dan status kecepatan ke UI/Frontend. Server mengirim *ping* setiap 15 detik dan me-*drop* client yang tidak respond dalam 10 detik (heartbeat).
 
 ---
 
@@ -29,11 +30,12 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
 
 ### A. Core Engine (Backend)
 - **Multi-threading:** Mendukung 1 hingga 128 *thread* per unduhan. Terdapat mode **Auto** (berdasarkan ukuran file) dan **Manual**.
-- **State Management:** Chunk dan progress disimpan di SQLite (`idmm.db`). Mendukung *Pause*, *Resume*, dan pemulihan setelah aplikasi ditutup.
+- **Worker Health Tracking:** Setiap worker thread didaftarkan di `activeWorkers` Map dengan metadata (download ID, chunk index, start time). Error handler (`worker.on('error')`) dan exit handler (`worker.on('exit', code)`) terpasang otomatis. Method `getWorkerHealth()` mengembalikan status semua worker aktif.
+- **State Management:** Chunk dan progress disimpan di SQLite (`idmm.db`). Mendukung *Pause*, *Resume*, dan pemulihan setelah aplikasi ditutup. Semua operasi DB menggunakan format `{ ok, data, error }` dengan 17 guard clauses untuk mencegah crash.
 - **Cancel & Delete:**
   - Fungsi `Cancel` mematikan semua *worker thread* secara paksa dan aman tanpa *memory leak*.
   - Menghapus unduhan memiliki 2 opsi: "Hanya Riwayat" atau "Riwayat + File Fisik Temp/Asli".
-- **Local Server:** Berjalan pada `http://127.0.0.1:9977`. Digunakan untuk komunikasi dengan UI dan Ekstensi (REST & WebSocket).
+- **Local Server:** Berjalan pada `http://127.0.0.1:9977`. Digunakan untuk komunikasi dengan UI dan Ekstensi (REST & WebSocket). Endpoint `/health` tersedia untuk monitoring.
 
 ### B. User Interface (UI) - Electron & React
 - **Window Controls & Layout:**
@@ -53,10 +55,21 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
   2. Meneruskan fungsi `suggest()` agar browser tidak *hang*.
   3. Mengirimkan parameter unduhan ke backend IDMM.
   4. Mencegah *loop* ganda (*double download*) dengan melacak ID unduhan.
+- **Health Check Mutual:** Extension melakukan `checkServer()` setiap 10 detik. Server mengirim WebSocket ping setiap 15 detik. Jika extension tidak respond dalam 10 detik, server me-*drop* koneksi. Extension menggunakan reconnect backoff (1s → 30s max) jika WebSocket terputus.
 
 ---
 
-## 3. Aturan Pengembangan (SOP)
+## 3. Changelog Ringkas
+
+| Versi | Perubahan |
+|-------|-----------|
+| v1.2.1 | UI overlap fix, global window drag, extension headless, pause/resume race fix |
+| v1.2.2 | Select folder dialog (OS picker) di Add Download dan Settings |
+| v1.2.3 | Worker health tracking, DB error propagation (17 guard clauses), server health endpoint, WebSocket heartbeat |
+
+---
+
+## 4. Aturan Pengembangan (SOP)
 
 Jika ada permintaan fitur baru atau perbaikan *bug*:
 1. **Baca Dokumen Ini:** Pastikan tidak ada konflik dengan arsitektur saat ini (contoh: jangan menambahkan UI pada ekstensi karena aturannya adalah *headless*).
