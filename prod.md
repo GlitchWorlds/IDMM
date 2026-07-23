@@ -1,6 +1,6 @@
 # Dokumentasi Produksi IDMM (Internet Download Manager Max)
 
-**Versi Terkini:** v1.2.3
+**Versi Terkini:** v1.2.4
 **Tujuan Dokumen:** *Single Source of Truth* (SSOT) untuk arsitektur, fitur, dan pedoman pengembangan proyek IDMM dan ekstensinya. Segala modifikasi di masa depan harus merujuk dan memperbarui dokumen ini.
 
 ---
@@ -31,6 +31,7 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
 ### A. Core Engine (Backend)
 - **Multi-threading:** Mendukung 1 hingga 128 *thread* per unduhan. Terdapat mode **Auto** (berdasarkan ukuran file) dan **Manual**.
 - **Worker Health Tracking:** Setiap worker thread didaftarkan di `activeWorkers` Map dengan metadata (download ID, chunk index, start time). Error handler (`worker.on('error')`) dan exit handler (`worker.on('exit', code)`) terpasang otomatis. Method `getWorkerHealth()` mengembalikan status semua worker aktif.
+- **Queue Priority:** Download queue mendukung 3 level prioritas: `HIGH`, `NORMAL`, `LOW`. Method `setPriority(id, level)` dan `getQueue()` tersedia. Download baru default ke NORMAL.
 - **State Management:** Chunk dan progress disimpan di SQLite (`idmm.db`). Mendukung *Pause*, *Resume*, dan pemulihan setelah aplikasi ditutup. Semua operasi DB menggunakan format `{ ok, data, error }` dengan 17 guard clauses untuk mencegah crash.
 - **Cancel & Delete:**
   - Fungsi `Cancel` mematikan semua *worker thread* secara paksa dan aman tanpa *memory leak*.
@@ -56,6 +57,7 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
   3. Mengirimkan parameter unduhan ke backend IDMM.
   4. Mencegah *loop* ganda (*double download*) dengan melacak ID unduhan.
 - **Health Check Mutual:** Extension melakukan `checkServer()` setiap 10 detik. Server mengirim WebSocket ping setiap 15 detik. Jika extension tidak respond dalam 10 detik, server me-*drop* koneksi. Extension menggunakan reconnect backoff (1s → 30s max) jika WebSocket terputus.
+- **Content Script Communication:** Content script mengirim `PAGE_METADATA` (pageTitle, pageUrl, contentLength, downloadLinks[], mediaUrls[]) ke background service worker via `chrome.runtime.sendMessage()`. Background memproses metadata dan mendeteksi konten yang bisa didownload.
 
 ---
 
@@ -66,6 +68,14 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
 | v1.2.1 | UI overlap fix, global window drag, extension headless, pause/resume race fix |
 | v1.2.2 | Select folder dialog (OS picker) di Add Download dan Settings |
 | v1.2.3 | Worker health tracking, DB error propagation (17 guard clauses), server health endpoint, WebSocket heartbeat |
+| v1.2.4 | Integration tests (7 tests), ResumeManager visibility, content script comms, community labels, queue priority (HIGH/NORMAL/LOW) |
+
+---
+
+### D. Testing
+- **Integration Tests:** `app/test/integration.test.js` — 7 tests menggunakan Node.js built-in test runner (`node:test`).
+- **Cara jalan:** `cd app && node test/integration.test.js`
+- **Coverage:** Module imports (3), DB lifecycle (2), Server+WebSocket (1), Download lifecycle (1)
 
 ---
 
