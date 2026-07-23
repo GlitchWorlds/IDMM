@@ -1,6 +1,6 @@
 # Dokumentasi Produksi IDMM (Internet Download Manager Max)
 
-**Versi Terkini:** v1.2.5
+**Versi Terkini:** v1.2.6
 **Tujuan Dokumen:** *Single Source of Truth* (SSOT) untuk arsitektur, fitur, dan pedoman pengembangan proyek IDMM dan ekstensinya. Segala modifikasi di masa depan harus merujuk dan memperbarui dokumen ini.
 
 ---
@@ -76,14 +76,14 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
 | v1.2.3 | Worker health tracking, DB error propagation (17 guard clauses), server health endpoint, WebSocket heartbeat |
 | v1.2.4 | Integration tests (7 tests), ResumeManager visibility, content script comms, community labels, queue priority (HIGH/NORMAL/LOW) |
 | v1.2.5 | Auto-install extension: Chrome, Edge, Brave, Opera, Vivaldi, Firefox (registry + shortcuts + .xpi) |
-| v1.2.5 | Auto-install extension: Chrome, Edge, Brave, Opera, Vivaldi, Firefox (registry + shortcuts + .xpi) |
+| v1.2.6 | QC: 15 findings fixed � DownloadManager decomposition (SpeedTracker, WorkerPool, DownloadQueue), DB return types unified, async I/O, queue priority, nodeIntegration:false, save_to validation, 15 edge case tests |
 
 ---
 
 ### D. Testing
-- **Integration Tests:** `app/test/integration.test.js` — 7 tests menggunakan Node.js built-in test runner (`node:test`).
+- **Integration Tests:** `app/test/integration.test.js` — 15 tests menggunakan Node.js built-in test runner (`node:test`).
 - **Cara jalan:** `cd app && node test/integration.test.js`
-- **Coverage:** Module imports (3), DB lifecycle (2), Server+WebSocket (1), Download lifecycle (1)
+- **Coverage:** Module imports (6, incl. SpeedTracker/WorkerPool/DownloadQueue), DB lifecycle (3), Server+WebSocket (1), Download lifecycle (5, incl. concurrent downloads, priority queue, DB error propagation, semaphore double-release)
 
 ---
 
@@ -91,6 +91,7 @@ Proyek IDMM terbagi menjadi 3 komponen utama:
 
 Jika ada permintaan fitur baru atau perbaikan *bug*:
 1. **Baca Dokumen Ini:** Pastikan tidak ada konflik dengan arsitektur saat ini (contoh: jangan menambahkan UI pada ekstensi karena aturannya adalah *headless*).
-2. **Ubah Kode & Tes:** Lakukan perubahan, pastikan *build* sukses (khusus UI wajib menggunakan `loadFile`, `nodeIntegration: true`, `contextIsolation: true`).
+2. **Ubah Kode & Tes:** Lakukan perubahan, pastikan *build* sukses (khusus UI wajib menggunakan `loadFile`, `nodeIntegration: false`, `contextIsolation: true`).
 3. **Update prod.md:** Tambahkan spesifikasi fitur baru atau ubah yang lama di dokumen ini agar tetap relevan.
 4. **Commit & Build:** Sinkronisasi kode ke GitHub dan kompilasi (*dist*) versi *production* secara konsisten dengan konfigurasi `asar: false`.
+
