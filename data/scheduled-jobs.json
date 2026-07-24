@@ -1,0 +1,17 @@
+{
+  "jobs": [
+    {
+      "id": "job_1784883786439_e4sdwo",
+      "url": "https://example.com/file.zip",
+      "schedule": {
+        "type": "once",
+        "at": "2026-07-24T09:04:06.436Z"
+      },
+      "options": {},
+      "status": "cancelled",
+      "nextRun": "2026-07-24T09:04:06.436Z",
+      "lastRun": null,
+      "createdAt": "2026-07-24T09:03:06.439Z"
+    }
+  ]
+}

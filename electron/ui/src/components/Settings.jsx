@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSettings, updateSettings } from '../api';
 
-export default function Settings({ onBack, theme, onThemeChange }) {
+export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, saveRef }) {
   const [settings, setSettings] = useState({
     threadMode: 'auto',
     threads: 8,
@@ -10,12 +10,13 @@ export default function Settings({ onBack, theme, onThemeChange }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const isDirtyRef = useRef(false);
 
   useEffect(() => {
     getSettings()
       .then((s) => {
         if (s) {
-          // Map server snake_case keys to frontend camelCase
           setSettings((prev) => ({
             ...prev,
             threadMode: s.default_thread_mode ?? prev.threadMode,
@@ -28,11 +29,20 @@ export default function Settings({ onBack, theme, onThemeChange }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = async () => {
+  // Mark dirty on any setting change
+  const updateSetting = useCallback((key, value) => {
+    setSettings((prev) => {
+      const next = { ...prev, [key]: value };
+      isDirtyRef.current = true;
+      if (onDirtyChange) onDirtyChange(true);
+      return next;
+    });
+  }, [onDirtyChange]);
+
+  const handleSave = useCallback(async () => {
     setSaving(true);
     setSaved(false);
     try {
-      // Map frontend camelCase to server snake_case keys
       const payload = {
         default_thread_mode: settings.threadMode,
         default_threads: String(settings.threads),
@@ -40,27 +50,45 @@ export default function Settings({ onBack, theme, onThemeChange }) {
       };
       await updateSettings(payload);
       setSaved(true);
+      isDirtyRef.current = false;
+      if (onDirtyChange) onDirtyChange(false);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error(err);
     } finally {
       setSaving(false);
     }
-  };
+  }, [settings, onDirtyChange]);
 
+  // Expose handleSave to parent via saveRef
   useEffect(() => {
     if (saveRef) saveRef.current = handleSave;
-  });
+  }, [saveRef, handleSave]);
 
-  const handleSelectFolder = async () => {
-    if (window.idmm && window.idmm.selectFolder) {
+  // Prevent spam on select folder — lock while dialog open
+  const handleSelectFolder = useCallback(async () => {
+    if (folderPickerOpen) return;
+    if (!window.idmm || !window.idmm.selectFolder) return;
+
+    setFolderPickerOpen(true);
+    try {
       const folder = await window.idmm.selectFolder();
       if (folder) {
-        setSettings({ ...settings, savePath: folder });
-        if (onDirtyChange) onDirtyChange(true);
+        updateSetting('savePath', folder);
       }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFolderPickerOpen(false);
     }
-  };
+  }, [folderPickerOpen, updateSetting]);
+
+  // Handle theme change — mark dirty
+  const handleThemeChange = useCallback((value) => {
+    onThemeChange(value);
+    isDirtyRef.current = true;
+    if (onDirtyChange) onDirtyChange(true);
+  }, [onThemeChange, onDirtyChange]);
 
   if (loading) {
     return (
@@ -92,10 +120,7 @@ export default function Settings({ onBack, theme, onThemeChange }) {
           <p className="text-xs text-slate-500 mb-3">Select application color theme</p>
           <select
             value={theme}
-            onChange={(e) => {
-            onThemeChange(e.target.value);
-            if (onDirtyChange) onDirtyChange(true);
-          }}
+            onChange={(e) => handleThemeChange(e.target.value)}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
           >
             <option value="dark">Dark Theme (Default)</option>
@@ -109,10 +134,7 @@ export default function Settings({ onBack, theme, onThemeChange }) {
           <p className="text-xs text-slate-500 mb-3">How download threads are determined</p>
           <select
             value={settings.threadMode}
-            onChange={(e) => {
-              setSettings({ ...settings, threadMode: e.target.value });
-              if (onDirtyChange) onDirtyChange(true);
-            }}
+            onChange={(e) => updateSetting('threadMode', e.target.value)}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
           >
             <option value="auto">Auto (recommended)</option>
@@ -131,10 +153,7 @@ export default function Settings({ onBack, theme, onThemeChange }) {
                 min={1}
                 max={128}
                 value={settings.threads}
-                onChange={(e) => {
-              setSettings({ ...settings, threads: Number(e.target.value) });
-              if (onDirtyChange) onDirtyChange(true);
-            }}
+                onChange={(e) => updateSetting('threads', Number(e.target.value))}
                 className="flex-1 accent-accent"
               />
               <span className="text-sm font-mono text-accent w-10 text-center">{settings.threads}</span>
@@ -166,19 +185,17 @@ export default function Settings({ onBack, theme, onThemeChange }) {
             <input
               type="text"
               value={settings.savePath}
-              onChange={(e) => {
-              setSettings({ ...settings, savePath: e.target.value });
-              if (onDirtyChange) onDirtyChange(true);
-            }}
+              onChange={(e) => updateSetting('savePath', e.target.value)}
               placeholder="C:\Downloads"
               className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
             />
             <button
               type="button"
               onClick={handleSelectFolder}
-              className="px-3 py-2.5 rounded-lg bg-slate-700 text-slate-300 text-sm hover:bg-slate-600 transition-colors whitespace-nowrap"
+              disabled={folderPickerOpen}
+              className="px-3 py-2.5 rounded-lg bg-slate-700 text-slate-300 text-sm hover:bg-slate-600 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Select Folder
+              {folderPickerOpen ? '...' : 'Select Folder'}
             </button>
           </div>
         </div>

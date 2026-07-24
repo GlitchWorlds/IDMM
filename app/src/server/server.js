@@ -492,20 +492,37 @@ class IDMMServer {
         const platform = process.platform;
 
         if (platform === 'win32') {
-          // Chrome/Edge: use registry policy for persistent install
+          // Chrome/Edge: create desktop shortcut with --load-extension flag
+          // Registry method requires a 'key' field in manifest.json which we don't have.
+          // Shortcut approach works reliably for unpacked extensions.
           if (browser === 'chrome' || browser === 'edge') {
-            const regKey = browser === 'chrome'
-              ? 'HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallForcelist'
-              : 'HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist';
-            const extensionId = require(manifestPath).id || 'idmm-extension';
-            const updateUrl = 'https://clients2.google.com/service/update2/crx';
+            const browserExe = browser === 'chrome'
+              ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe')
+              : path.join('C:', 'Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+
+            // Check common locations
+            const fs2 = require('node:fs');
+            let exePath = browserExe;
+            if (!fs2.existsSync(exePath)) {
+              // Try Program Files
+              exePath = browser === 'chrome'
+                ? path.join('C:', 'Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe')
+                : path.join('C:', 'Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+            }
+            if (!fs2.existsSync(exePath)) {
+              return res.json({ ok: false, error: `${browser} not found. Is it installed?` });
+            }
+
+            const shortcutName = `IDMM - ${browser}.lnk`;
+            const shortcutPath = path.join(os.homedir(), 'Desktop', shortcutName);
+            const psScript = `$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('${shortcutPath}'); $sc.TargetPath = '${exePath}'; $sc.Arguments = '--load-extension="${extensionDir}" --no-first-run'; $sc.IconLocation = '${exePath},0'; $sc.Description = 'Launch ${browser} with IDMM extension'; $sc.Save()`;
 
             return new Promise((resolve) => {
-              exec(`reg add "${regKey}" /v 1 /t REG_SZ /d "${extensionId};${updateUrl}" /f`, (err) => {
+              exec(`powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`, (err) => {
                 if (err) {
-                  resolve(res.json({ ok: false, error: `Failed to install ${browser} extension via registry: ${err.message}` }));
+                  resolve(res.json({ ok: false, error: `Failed to create ${browser} shortcut: ${err.message}` }));
                 } else {
-                  resolve(res.json({ ok: true, message: `${browser} extension installed via registry policy. Restart ${browser} to apply.` }));
+                  resolve(res.json({ ok: true, message: `${browser} shortcut created on Desktop with IDMM extension. Use it to launch ${browser} with IDMM.` }));
                 }
               });
             });

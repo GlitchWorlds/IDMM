@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IDMM  Download Manager Max",
   "short_name": "IDMM",
-  "version": "1.2.7",
+  "version": "1.3.0",
   "description": "Free, open-source download manager with multi-threaded acceleration. Intercepts downloads and sends them to IDMM for maximum speed.",
 
   "permissions": [
