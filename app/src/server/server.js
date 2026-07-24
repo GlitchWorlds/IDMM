@@ -7,6 +7,12 @@ const http = require('node:http');
 const { WebSocketServer } = require('ws');
 const path = require('node:path');
 
+// New feature routes
+const { createBatchRouter } = require('../routes/batch');
+const { createSchedulerRouter } = require('../routes/scheduler');
+const { createHistoryRouter } = require('../routes/history');
+const { createCategoriesRouter } = require('../routes/categories');
+
 /**
  * IDMM API Server.
  *
@@ -474,7 +480,9 @@ class IDMMServer {
         const os = require('node:os');
         const path = require('node:path');
 
-        const extensionDir = path.join(__dirname, '..', '..', 'extension');
+        const extensionDir = fs.existsSync(path.join(__dirname, '..', '..', 'extension'))
+          ? path.join(__dirname, '..', '..', 'extension')
+          : path.join(__dirname, '..', '..', '..', '..', 'extension');
         const manifestPath = path.join(extensionDir, 'manifest.json');
 
         if (!fs.existsSync(manifestPath)) {
@@ -578,6 +586,12 @@ class IDMMServer {
         res.status(500).json({ error: sanitizeError(err) });
       }
     });
+
+    // --- New feature routes ---
+    this.app.use('/api/downloads/batch', createBatchRouter({ downloader: this.downloader }));
+    this.app.use('/api/schedule', createSchedulerRouter({ downloader: this.downloader }));
+    this.app.use('/api/downloads/history', createHistoryRouter({ db: this.db }));
+    this.app.use('/api/categories', createCategoriesRouter());
   }
 
   //  WebSocket 
