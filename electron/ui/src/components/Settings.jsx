@@ -48,11 +48,16 @@ export default function Settings({ onBack, theme, onThemeChange }) {
     }
   };
 
+  useEffect(() => {
+    if (saveRef) saveRef.current = handleSave;
+  });
+
   const handleSelectFolder = async () => {
     if (window.idmm && window.idmm.selectFolder) {
       const folder = await window.idmm.selectFolder();
       if (folder) {
         setSettings({ ...settings, savePath: folder });
+        if (onDirtyChange) onDirtyChange(true);
       }
     }
   };
@@ -87,7 +92,10 @@ export default function Settings({ onBack, theme, onThemeChange }) {
           <p className="text-xs text-slate-500 mb-3">Select application color theme</p>
           <select
             value={theme}
-            onChange={(e) => onThemeChange(e.target.value)}
+            onChange={(e) => {
+            onThemeChange(e.target.value);
+            if (onDirtyChange) onDirtyChange(true);
+          }}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
           >
             <option value="dark">Dark Theme (Default)</option>
@@ -101,7 +109,10 @@ export default function Settings({ onBack, theme, onThemeChange }) {
           <p className="text-xs text-slate-500 mb-3">How download threads are determined</p>
           <select
             value={settings.threadMode}
-            onChange={(e) => setSettings({ ...settings, threadMode: e.target.value })}
+            onChange={(e) => {
+              setSettings({ ...settings, threadMode: e.target.value });
+              if (onDirtyChange) onDirtyChange(true);
+            }}
             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
           >
             <option value="auto">Auto (recommended)</option>
@@ -120,7 +131,10 @@ export default function Settings({ onBack, theme, onThemeChange }) {
                 min={1}
                 max={128}
                 value={settings.threads}
-                onChange={(e) => setSettings({ ...settings, threads: Number(e.target.value) })}
+                onChange={(e) => {
+              setSettings({ ...settings, threads: Number(e.target.value) });
+              if (onDirtyChange) onDirtyChange(true);
+            }}
                 className="flex-1 accent-accent"
               />
               <span className="text-sm font-mono text-accent w-10 text-center">{settings.threads}</span>
@@ -152,7 +166,10 @@ export default function Settings({ onBack, theme, onThemeChange }) {
             <input
               type="text"
               value={settings.savePath}
-              onChange={(e) => setSettings({ ...settings, savePath: e.target.value })}
+              onChange={(e) => {
+              setSettings({ ...settings, savePath: e.target.value });
+              if (onDirtyChange) onDirtyChange(true);
+            }}
               placeholder="C:\Downloads"
               className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
             />

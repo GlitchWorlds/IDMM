@@ -460,6 +460,112 @@ class IDMMServer {
       }
     });
 
+    // POST /api/extension/install  Install browser extension
+    this.app.post('/api/extension/install', async (req, res) => {
+      try {
+        const { browser } = req.body;
+        const validBrowsers = ['chrome', 'edge', 'firefox', 'brave', 'opera', 'vivaldi'];
+        if (!browser || !validBrowsers.includes(browser)) {
+          return res.status(400).json({ ok: false, error: 'Invalid browser. Supported: chrome, edge, firefox, brave, opera, vivaldi' });
+        }
+
+        const { execFile, exec } = require('node:child_process');
+        const fs = require('node:fs');
+        const os = require('node:os');
+        const path = require('node:path');
+
+        const extensionDir = path.join(__dirname, '..', '..', 'extension');
+        const manifestPath = path.join(extensionDir, 'manifest.json');
+
+        if (!fs.existsSync(manifestPath)) {
+          return res.status(404).json({ ok: false, error: 'Extension not found on server.' });
+        }
+
+        const platform = process.platform;
+
+        if (platform === 'win32') {
+          // Chrome/Edge: use registry policy for persistent install
+          if (browser === 'chrome' || browser === 'edge') {
+            const regKey = browser === 'chrome'
+              ? 'HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallForcelist'
+              : 'HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist';
+            const extensionId = require(manifestPath).id || 'idmm-extension';
+            const updateUrl = 'https://clients2.google.com/service/update2/crx';
+
+            return new Promise((resolve) => {
+              exec(`reg add "${regKey}" /v 1 /t REG_SZ /d "${extensionId};${updateUrl}" /f`, (err) => {
+                if (err) {
+                  resolve(res.json({ ok: false, error: `Failed to install ${browser} extension via registry: ${err.message}` }));
+                } else {
+                  resolve(res.json({ ok: true, message: `${browser} extension installed via registry policy. Restart ${browser} to apply.` }));
+                }
+              });
+            });
+          }
+
+          // Firefox: copy .xpi to profile directories
+          if (browser === 'firefox') {
+            const profilesRoot = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles');
+            if (!fs.existsSync(profilesRoot)) {
+              return res.json({ ok: false, error: 'Firefox profiles directory not found. Is Firefox installed?' });
+            }
+            const profiles = fs.readdirSync(profilesRoot).filter(p =>
+              fs.statSync(path.join(profilesRoot, p)).isDirectory()
+            );
+            if (profiles.length === 0) {
+              return res.json({ ok: false, error: 'No Firefox profiles found.' });
+            }
+            const xpiPath = path.join(extensionDir, 'idmm.xpi');
+            if (!fs.existsSync(xpiPath)) {
+              return res.json({ ok: false, error: 'Extension .xpi file not found.' });
+            }
+            for (const profile of profiles) {
+              const dest = path.join(profilesRoot, profile, 'extensions');
+              if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+              fs.copyFileSync(xpiPath, path.join(dest, 'idmm@idmm.xpi'));
+            }
+            return res.json({ ok: true, message: `Firefox extension installed to ${profiles.length} profile(s). Restart Firefox to apply.` });
+          }
+
+          // Brave/Opera/Vivaldi: Chromium-based, load unpacked
+          const browserPaths = {
+            brave: path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'User Data'),
+            opera: path.join(os.homedir(), 'AppData', 'Local', 'Opera Software', 'Opera Stable'),
+            vivaldi: path.join(os.homedir(), 'AppData', 'Local', 'Vivaldi', 'User Data'),
+          };
+
+          const userDataPath = browserPaths[browser];
+          if (!userDataPath || !fs.existsSync(userDataPath)) {
+            return res.json({ ok: false, error: `${browser} installation not found. Is it installed?` });
+          }
+
+          // Create a shortcut with --load-extension flag
+          const shortcutPath = path.join(os.homedir(), 'Desktop', `IDMM-${browser}.lnk`);
+          const browserExecutables = {
+            brave: 'BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+            opera: 'Opera Software\\Opera Stable\\opera.exe',
+            vivaldi: 'Vivaldi\\Application\\vivaldi.exe',
+          };
+
+          // For Chromium-based browsers, we can't force-load from server side safely.
+          // Return instructions instead.
+          return res.json({
+            ok: true,
+            message: `To install on ${browser}: Open ${browser}, go to chrome://extensions, enable Developer Mode, click "Load unpacked" and select: ${extensionDir}`,
+          });
+        }
+
+        // Linux/macOS: return instructions
+        return res.json({
+          ok: true,
+          message: `To install on ${browser}: Open browser extension settings and load unpacked from: ${extensionDir}`,
+        });
+      } catch (err) {
+        console.error('Extension install error:', err.message);
+        res.status(500).json({ ok: false, error: 'Failed to install extension: ' + err.message });
+      }
+    });
+
     // GET /api/stats  Download statistics
     this.app.get('/api/stats', (req, res) => {
       try {
