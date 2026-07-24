@@ -4,6 +4,7 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain } = 
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
+const ClipboardMonitor = require(path.join(__dirname, 'clipboard-monitor'));
 
 //  IDMM Core 
 // Resolve engine paths  works in both dev and packaged mode
@@ -219,6 +220,15 @@ app.whenReady().then(async () => {
     await startServer();
     createWindow();
     createTray();
+
+    // Clipboard monitor — auto-detect URLs copied to clipboard
+    const clipMonitor = new ClipboardMonitor({ interval: 2000, cooldown: 10000 });
+    clipMonitor.on('url-detected', (url) => {
+      if (downloader) {
+        downloader.startDownload(url).catch(err => console.error('[Clipboard]', err.message));
+      }
+    });
+    clipMonitor.start();
 
     // Update tray active count periodically
     setInterval(() => {
