@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 /**
@@ -19,24 +20,24 @@ const path = require('node:path');
  * @param {Function} [options.onProgress] - Progress callback (bytesWritten, total)
  * @returns {Promise<void>}
  */
-function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
+async function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
+  // F13: Atomic write — write to temp file first, rename on completion
+  const outDir = path.dirname(outputPath);
+  if (!(await fsp.access(outDir).then(() => true).catch(() => false))) {
+    await fsp.mkdir(outDir, { recursive: true });
+  }
+
+  const tempPath = outputPath + '.part';
+
   return new Promise((resolve, reject) => {
-    // F13: Atomic write  write to temp file first, rename on completion
-    const outDir = path.dirname(outputPath);
-    if (!fs.existsSync(outDir)) {
-      fs.mkdirSync(outDir, { recursive: true });
-    }
-
-    const tempPath = outputPath + '.part';
-
     const outputStream = fs.createWriteStream(tempPath);
     let bytesWritten = 0;
     let chunkIndex = 0;
 
-    function writeNextChunk() {
+    async function writeNextChunk() {
       if (chunkIndex >= chunkPaths.length) {
         outputStream.end(() => {
-          // F13: Atomic rename  on the same filesystem this is guaranteed atomic
+          // F13: Atomic rename — on the same filesystem this is guaranteed atomic
           try {
             fs.renameSync(tempPath, outputPath);
             resolve();
@@ -52,7 +53,7 @@ function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
       const chunkPath = chunkPaths[chunkIndex];
       chunkIndex++;
 
-      if (!fs.existsSync(chunkPath)) {
+      if (!(await fsp.access(chunkPath).then(() => true).catch(() => false))) {
         outputStream.destroy();
         // Clean up temp file
         try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
@@ -68,7 +69,7 @@ function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
         if (onProgress) {
           onProgress(bytesWritten, totalSize);
         }
-        // R2: Backpressure  pause reader until writer drains
+        // R2: Backpressure — pause reader until writer drains
         if (!canContinue) {
           inputStream.pause();
           outputStream.once('drain', () => inputStream.resume());
@@ -103,10 +104,10 @@ function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
  * @param {string[]} chunkPaths - Array of .part file paths to delete
  * @param {string} [stateFilePath] - Optional download.json path to keep
  */
-function cleanupChunks(chunkPaths, stateFilePath) {
+async function cleanupChunks(chunkPaths, stateFilePath) {
   for (const chunkPath of chunkPaths) {
     try {
-      if (fs.existsSync(chunkPath)) {
+      if (await fsp.access(chunkPath).then(() => true).catch(() => false)) {
         fs.unlinkSync(chunkPath);
       }
     } catch {
@@ -169,7 +170,7 @@ async function mergeAndVerify({
 
   // Step 4: Cleanup temp files
   if (cleanupAfter) {
-    cleanupChunks(chunkPaths);
+    await cleanupChunks(chunkPaths);
   }
 
   return {

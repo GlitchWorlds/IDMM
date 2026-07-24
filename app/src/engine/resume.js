@@ -208,7 +208,7 @@ class ResumeManager {
       for (const e of entries) {
         if (e.isDirectory()) {
           const statePath = this.getStateFilePath(e.name);
-          if (fs.existsSync(statePath)) result.push(e.name);
+          if (await fsp.access(statePath).then(() => true).catch(() => false)) result.push(e.name);
         }
       }
       return result;

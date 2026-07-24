@@ -7,6 +7,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validateRedirect } = require('../utils/ssrf');
 
+// E-8: HTTP keep-alive agents for connection reuse
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 1 });
+
 /**
  * IDMM Chunk Worker Thread.
  *
@@ -112,6 +116,7 @@ function downloadChunk(attempt, currentUrl, redirectCount = 0) {
         ...extraHeaders,
       },
       timeout: timeout,
+      agent: isHttps ? httpsAgent : httpAgent,
     };
 
     const req = transport.request(reqOptions, (res) => {

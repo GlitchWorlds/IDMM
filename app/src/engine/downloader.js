@@ -320,6 +320,8 @@ class DownloadManager {
     this.active.delete(downloadId);
     this.speedTracker.samples.delete(downloadId);
 
+    this._dequeue(downloadId); // Remove from queue so _processQueue doesn't re-resume
+    this._processQueue();
     return { id: downloadId, status: 'paused' };
   }
 
@@ -449,6 +451,7 @@ class DownloadManager {
     this.db.updateDownload(downloadId, { status: 'cancelled' });
     this._dequeue(downloadId); // Gap 5: Remove from priority queue
 
+    this._processQueue();
     return { id: downloadId, status: 'cancelled' };
   }
 
@@ -750,8 +753,8 @@ class DownloadManager {
     // F8: Cache chunk DB IDs to avoid repeated getChunks() calls on every progress update
     state.chunkDbIds = {};
     const dbChunks = this.db.getChunks(state.id);
-    if (Array.isArray(dbChunks)) {
-      for (const dbc of dbChunks) {
+    if (dbChunks && dbChunks.ok && Array.isArray(dbChunks.data)) {
+      for (const dbc of dbChunks.data) {
         state.chunkDbIds[dbc.chunk_index] = dbc.id;
       }
     }
@@ -1084,8 +1087,8 @@ class DownloadManager {
       // Cross-reference with actual .part file size on disk
       const chunkPath = this.resume.getChunkPath(downloadId, chunk.index);
       try {
-        if (fs.existsSync(chunkPath)) {
-          const diskSize = fs.statSync(chunkPath).size;
+        if (await fsp.access(chunkPath).then(() => true).catch(() => false)) {
+          const diskSize = (await fsp.stat(chunkPath)).size;
           const expectedSize = chunk.end - chunk.start + 1;
           if (diskSize >= expectedSize) {
             chunk.downloaded = expectedSize;
@@ -1183,7 +1186,7 @@ class DownloadManager {
 
       // Save to DB and resume file
       const existingChunks = this.db.getChunks(state.id);
-      if (!Array.isArray(existingChunks) || existingChunks.length === 0) {
+      if (!existingChunks || !existingChunks.ok || !Array.isArray(existingChunks.data) || existingChunks.data.length === 0) {
         this.db.createChunks(state.id, [{
           index: 0,
           start: 0,
@@ -1195,8 +1198,8 @@ class DownloadManager {
       if (!state.chunkDbIds) {
         state.chunkDbIds = {};
         const dbChunks = this.db.getChunks(state.id);
-        if (Array.isArray(dbChunks)) {
-          for (const dbc of dbChunks) {
+        if (dbChunks && dbChunks.ok && Array.isArray(dbChunks.data)) {
+          for (const dbc of dbChunks.data) {
             state.chunkDbIds[dbc.chunk_index] = dbc.id;
           }
         }
@@ -1376,15 +1379,22 @@ class DownloadManager {
       state.eta = Math.ceil(remaining / state.speed);
     }
 
-    // Persist to DB periodically (throttled to max once per 500ms)
+    // Persist to DB periodically (throttled to max once per 2000ms, E-1)
     const now = Date.now();
-    if (!state._lastDbWrite || (now - state._lastDbWrite) >= 500) {
-      state._lastDbWrite = now;
-      this.db.updateDownload(state.id, {
-        downloaded: totalDownloaded,
-        speed: state.speed,
-        eta: state.eta,
-      });
+    if (!state._lastDbWrite || (now - state._lastDbWrite) >= 2000) {
+      const progress = state.totalSize > 0
+        ? Math.round((totalDownloaded / state.totalSize) * 100)
+        : 0;
+      const lastProgress = state._lastProgress || 0;
+      if (Math.abs(progress - lastProgress) > 1 || !state._lastDbWrite) {
+        state._lastDbWrite = now;
+        state._lastProgress = progress;
+        this.db.updateDownload(state.id, {
+          downloaded: totalDownloaded,
+          speed: state.speed,
+          eta: state.eta,
+        });
+      }
     }
 
     // Notify listeners
@@ -1481,6 +1491,8 @@ class DownloadManager {
       this.active.delete(state.id);
       this.speedTracker.samples.delete(state.id);
     }
+
+    this._processQueue();
   }
 
   /**

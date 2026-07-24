@@ -20,10 +20,11 @@ class SpeedTracker {
   addSample(downloadId, bytes) {
     let samples = this.samples.get(downloadId) || [];
     samples.push({ time: Date.now(), bytes });
-    // Keep only last 3 seconds
+    // Keep only last 3 seconds — use findIndex+slice instead of while+shift (E-6: O(n) → O(log n) + slice)
     const cutoff = Date.now() - 3000;
-    while (samples.length > 0 && samples[0].time < cutoff) {
-      samples.shift();
+    const cutoffIdx = samples.findIndex(s => s.time >= cutoff);
+    if (cutoffIdx > 0) {
+      samples = samples.slice(cutoffIdx);
     }
     this.samples.set(downloadId, samples);
   }

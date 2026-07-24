@@ -326,12 +326,19 @@ class IDMMDatabase {
 
   createChunks(downloadId, chunks) {
     try {
-      for (const chunk of chunks) {
-        this._run(
-          `INSERT INTO chunks (download_id, chunk_index, start_byte, end_byte, status)
-           VALUES (?, ?, ?, ?, 'pending')`,
-          [downloadId, chunk.index, chunk.start, chunk.end]
-        );
+      this._run('BEGIN');
+      try {
+        for (const chunk of chunks) {
+          this._run(
+            `INSERT INTO chunks (download_id, chunk_index, start_byte, end_byte, status)
+             VALUES (?, ?, ?, ?, 'pending')`,
+            [downloadId, chunk.index, chunk.start, chunk.end]
+          );
+        }
+        this._run('COMMIT');
+      } catch (innerErr) {
+        this._run('ROLLBACK');
+        throw innerErr;
       }
       return { ok: true };
     } catch (err) {
@@ -484,15 +491,35 @@ class IDMMDatabase {
   getResumableDownloads() {
     try {
       const rows = this._query(
-        "SELECT * FROM downloads WHERE status IN ('downloading', 'paused', 'pending')"
+        `SELECT d.*, c.chunk_index, c.start_byte, c.end_byte, c.downloaded_bytes, c.status as chunk_status
+         FROM downloads d
+         LEFT JOIN chunks c ON c.download_id = d.id
+         WHERE d.status IN ('downloading', 'paused', 'pending')
+         ORDER BY d.created_at DESC, c.chunk_index ASC`
       );
-      const result = rows.map(row => {
-        row.headers = row.headers ? JSON.parse(row.headers) : null;
-        const chunksResult = this.getChunks(row.id);
-        row.chunks = chunksResult.ok ? (chunksResult.data || []) : [];
-        return row;
-      });
-      return { ok: true, data: result };
+
+      const downloadMap = new Map();
+      for (const row of rows) {
+        if (!downloadMap.has(row.id)) {
+          downloadMap.set(row.id, {
+            ...row,
+            headers: row.headers ? JSON.parse(row.headers) : null,
+            chunks: [],
+          });
+        }
+        const dl = downloadMap.get(row.id);
+        if (row.chunk_index !== null) {
+          dl.chunks.push({
+            chunk_index: row.chunk_index,
+            start_byte: row.start_byte,
+            end_byte: row.end_byte,
+            downloaded_bytes: row.downloaded_bytes,
+            status: row.chunk_status,
+          });
+        }
+      }
+
+      return { ok: true, data: Array.from(downloadMap.values()) };
     } catch (err) {
       console.error('[DB] getResumableDownloads error:', err.message);
       return { ok: false, error: 'Failed to retrieve resumable downloads' };

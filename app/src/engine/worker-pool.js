@@ -1,5 +1,7 @@
 'use strict';
 
+// TODO: implement persistent worker reuse (E-3)
+
 /**
  * WorkerPool — Global worker concurrency management with health tracking.
  * Extracted from DownloadManager (Fix #1: Decomposition).
