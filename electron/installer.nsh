@@ -97,18 +97,31 @@ Var /GLOBAL ExtPath
   ; CHROMIUM EXTENSION INSTALL (Registry policy method)
   ; ============================================================
 
-  ; --- Chrome ---
+  ; ============================================================
+  ; CHROMIUM EXTENSION INSTALL (Admin — Registry Policy)
+  ; With admin rights, we can use HKLM which Chrome requires
+  ; for auto-install via Group Policy.
+  ; ============================================================
+
+  ; --- Chrome (HKLM Policy — Admin only) ---
   StrCmp $FoundChrome "0" SkipChrome
-    WriteRegStr HKCU "Software\Google\Chrome\Extensions\idmm-extension" "path" "$ExtPath"
-    WriteRegStr HKCU "Software\Google\Chrome\Extensions\idmm-extension" "version" "1.2.4"
-    CreateShortCut "$DESKTOP\IDMM - Chrome.lnk" "$ChromePath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Chrome"
+    ReadRegDword $0 HKLM "Software\Google\Chrome" "Installed"
+    ; Chrome extension ID from generated RSA key
+    StrCpy $0 "oacdlfdjmjepdjgcjhdihbfemioifhao"
+    WriteRegStr HKLM "Software\Policies\Google\Chrome\ExtensionInstallForcelist" "1" "$0;https://clients2.google.com/service/update2/crx"
+    ; Also set for unpacked load (as fallback)
+    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$0" "path" "$ExtPath"
+    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$0" "version" "1.3.0"
+    CreateShortCut "$DESKTOP\IDMM - Chrome.lnk" "$ChromePath" '--load-extension="$ExtPath"' "" "" SW_SHOWNORMAL "" "IDMM - Chrome"
   SkipChrome:
 
-  ; --- Edge ---
+  ; --- Edge (HKLM Policy — Admin only) ---
   StrCmp $FoundEdge "0" SkipEdge
-    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\idmm-extension" "path" "$ExtPath"
-    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\idmm-extension" "version" "1.2.4"
-    CreateShortCut "$DESKTOP\IDMM - Edge.lnk" "$EdgePath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Edge"
+    StrCpy $0 "oacdlfdjmjepdjgcjhdihbfemioifhao"
+    WriteRegStr HKLM "Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" "1" "$0;https://edge.microsoft.com/extensionwebstorebase/v1/crx"
+    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$0" "path" "$ExtPath"
+    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$0" "version" "1.3.0"
+    CreateShortCut "$DESKTOP\IDMM - Edge.lnk" "$EdgePath" '--load-extension="$ExtPath"' "" "" SW_SHOWNORMAL "" "IDMM - Edge"
   SkipEdge:
 
   ; --- Brave ---
@@ -277,10 +290,12 @@ Var /GLOBAL ExtPath
   ; ============================================================
 
   ; --- Chrome ---
-  DeleteRegKey HKCU "Software\Google\Chrome\Extensions\idmm-extension"
+  DeleteRegKey HKCU "Software\Google\Chrome\Extensions\oacdlfdjmjepdjgcjhdihbfemioifhao"
+  DeleteRegKey HKLM "Software\Policies\Google\Chrome\ExtensionInstallForcelist"
 
   ; --- Edge ---
-  DeleteRegKey HKCU "Software\Microsoft\Edge\Extensions\idmm-extension"
+  DeleteRegKey HKCU "Software\Microsoft\Edge\Extensions\oacdlfdjmjepdjgcjhdihbfemioifhao"
+  DeleteRegKey HKLM "Software\Policies\Microsoft\Edge\ExtensionInstallForcelist"
 
   ; --- Brave (no registry entry, just shortcuts) ---
 
@@ -294,7 +309,7 @@ Var /GLOBAL ExtPath
   ; ============================================================
   ; REMOVE FIREFOX .XPI FROM PROFILES
   ; ============================================================
-  nsExec::ExecToStack 'cmd /c for /d %%P in ("%APPDATA%\Mozilla\Firefox\Profiles\*.default*") do del /q "%%P\extensions\{idmm-extension-id}@idmm.xpi" 2>nul'
+  nsExec::ExecToStack 'cmd /c for /d %%P in ("%APPDATA%\Mozilla\Firefox\Profiles\*.default*") do del /q "%%P\extensions\idmm-extension@glitchworlds.xpi" 2>nul'
   Pop $0
   Pop $1
 
