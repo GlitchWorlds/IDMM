@@ -1,14 +1,14 @@
 'use strict';
 
 /**
- * WorkerPool — Global worker concurrency management with health tracking
- * and persistent worker reuse (E-3).
+ * WorkerPool — Global worker concurrency management with health tracking.
+ * Extracted from DownloadManager (Fix #1: Decomposition).
  *
  * Uses a counting semaphore to cap total concurrent workers across all downloads.
- * Idle workers are kept in a pool and reused for same-path worker scripts.
+ *
+ * E-3: Persistent worker reuse — workers are kept alive for reuse across downloads
+ *      instead of being created/destroyed on every chunk.
  */
-
-const { Worker } = require('node:worker_threads');
 
 class WorkerPool {
   /**
@@ -21,8 +21,11 @@ class WorkerPool {
     /** @type {Map<number, {worker: Object, downloadId: string, chunkIndex: number, startTime: number}>} */
     this.activeWorkers = new Map();
     this._workerIdCounter = 0;
-    /** @type {Map<string, Array<Worker>>} — idle workers keyed by workerPath */
-    this._idlePool = new Map();
+
+    // E-3: Pool of idle workers available for reuse
+    /** @type {Array<{worker: Object, id: number}>} */
+    this._idlePool = [];
+    this._maxIdleWorkers = 16; // Keep up to 16 idle workers for reuse
   }
 
   /**
@@ -39,11 +42,20 @@ class WorkerPool {
 
   /**
    * Release a worker slot. Guards against double-release.
+   * E-3: Optionally return worker to idle pool for reuse.
    * @param {Object} worker — Worker instance (tracked via _semaphoreReleased flag)
+   * @param {boolean} [reuse=false] — If true, return worker to idle pool
    */
-  release(worker) {
+  release(worker, reuse = false) {
     if (worker && worker._semaphoreReleased) return;
     if (worker) worker._semaphoreReleased = true;
+
+    // E-3: Return worker to idle pool if reuse requested and pool not full
+    if (reuse && worker && !worker.exited && this._idlePool.length < this._maxIdleWorkers) {
+      const id = ++this._workerIdCounter;
+      this._idlePool.push({ worker, id });
+    }
+
     this.current--;
     if (this.queue.length > 0) {
       this.current++;
@@ -52,56 +64,29 @@ class WorkerPool {
   }
 
   /**
-   * Acquire a reusable worker for the given worker script path.
-   * If an idle worker exists for this path, reuse it. Otherwise spawn new.
-   * @param {string} workerPath — absolute path to worker script
-   * @param {Object} workerData — data to pass to worker
-   * @returns {Worker}
+   * E-3: Get an idle worker from the pool, if available.
+   * @returns {Object|null}
    */
-  acquireWorker(workerPath, workerData) {
-    const idle = this._idlePool.get(workerPath);
-    if (idle && idle.length > 0) {
-      const worker = idle.pop();
-      // Post new job data to reused worker
-      worker.postMessage({ type: 'new-job', data: workerData });
-      return worker;
-    }
-    // No idle worker — spawn new
-    return new Worker(workerPath, { workerData });
+  getIdleWorker() {
+    if (this._idlePool.length === 0) return null;
+    const entry = this._idlePool.shift();
+    return entry.worker;
   }
 
   /**
-   * Return a worker to the idle pool for reuse instead of terminating.
-   * @param {Worker} worker
-   * @param {string} workerPath — the script path the worker was created with
+   * E-3: Terminate all idle workers (e.g., on shutdown).
    */
-  releaseWorker(worker, workerPath) {
-    if (!worker) return;
-    // Remove from active tracking
-    for (const [id, info] of this.activeWorkers) {
-      if (info.worker === worker) {
-        this.activeWorkers.delete(id);
-        break;
-      }
+  terminateIdleWorkers() {
+    for (const { worker } of this._idlePool) {
+      try { worker.terminate(); } catch { /* best effort */ }
     }
-    // Return to idle pool
-    if (!this._idlePool.has(workerPath)) {
-      this._idlePool.set(workerPath, []);
-    }
-    this._idlePool.get(workerPath).push(worker);
+    this._idlePool = [];
   }
 
-  /**
-   * Terminate all idle workers (e.g., on app shutdown).
-   */
-  terminateAllIdle() {
-    for (const [, workers] of this._idlePool) {
-      for (const w of workers) {
-        try { w.terminate(); } catch {}
-      }
-    }
-    this._idlePool.clear();
-  }
+  // spawnWorker, cancelAll, deregister removed 2025-01 (dead code).
+  // DownloadManager handles worker spawning/termination directly via
+  // _spawnWorkerAsync and _cancelAllWorkers. WorkerPool now only tracks
+  // health and active count.
 
   /**
    * Get health snapshot of all active workers.
@@ -128,6 +113,14 @@ class WorkerPool {
    */
   getActiveCount() {
     return this.activeWorkers.size;
+  }
+
+  /**
+   * Get count of idle workers available for reuse.
+   * @returns {number}
+   */
+  getIdleCount() {
+    return this._idlePool.length;
   }
 }
 

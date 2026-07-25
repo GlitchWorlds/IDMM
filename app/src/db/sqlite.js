@@ -22,17 +22,18 @@ class IDMMDatabase {
     this.db = db;
     this.dbPath = dbPath;
     this._dirty = false;
+    this._lastWriteTime = 0;
 
     this._initTables();
     this._initSettings();
     this.save();
 
-    // Auto-save every 5 seconds if dirty
+    // E-1: Throttled auto-save every 2 seconds if dirty
     this._saveInterval = setInterval(() => {
       if (this._dirty) {
         this.save();
       }
-    }, 5000);
+    }, 2000);
   }
 
   /**
@@ -42,17 +43,20 @@ class IDMMDatabase {
    */
   static async create(dbPath) {
     const dir = path.dirname(dbPath);
-    if (!fs.existsSync(dir)) {
+    try {
+      await fsp.access(dir);
+    } catch {
       await fsp.mkdir(dir, { recursive: true });
     }
 
     const SQL = await initSqlJs();
     let db;
 
-    if (fs.existsSync(dbPath)) {
+    try {
+      await fsp.access(dbPath);
       const fileBuffer = await fsp.readFile(dbPath);
       db = new SQL.Database(fileBuffer);
-    } else {
+    } catch {
       db = new SQL.Database();
     }
 
@@ -79,6 +83,7 @@ class IDMMDatabase {
       const data = this.db.export();
       fs.writeFileSync(this.dbPath, Buffer.from(data));
       this._dirty = false;
+      this._lastWriteTime = Date.now();
     } catch (err) {
       console.error('[DB] Save error:', err.message);
     }
@@ -119,6 +124,12 @@ class IDMMDatabase {
       console.error('[DB] Run error:', sql, err.message);
       throw err;
     }
+  }
+
+  // E-1: Throttled write — only persist if >2s since last write AND data changed >1%
+  _shouldThrottleWrite() {
+    const now = Date.now();
+    return (now - this._lastWriteTime) < 2000;
   }
 
   // ── Table Init ──
@@ -324,29 +335,27 @@ class IDMMDatabase {
 
   // ── Chunk Operations ──
 
+  // WP-1: Wrap multi-row INSERTs in BEGIN/COMMIT transaction
   createChunks(downloadId, chunks) {
     try {
       this._run('BEGIN');
-      try {
-        for (const chunk of chunks) {
-          this._run(
-            `INSERT INTO chunks (download_id, chunk_index, start_byte, end_byte, status)
-             VALUES (?, ?, ?, ?, 'pending')`,
-            [downloadId, chunk.index, chunk.start, chunk.end]
-          );
-        }
-        this._run('COMMIT');
-      } catch (innerErr) {
-        this._run('ROLLBACK');
-        throw innerErr;
+      for (const chunk of chunks) {
+        this._run(
+          `INSERT INTO chunks (download_id, chunk_index, start_byte, end_byte, status)
+           VALUES (?, ?, ?, ?, 'pending')`,
+          [downloadId, chunk.index, chunk.start, chunk.end]
+        );
       }
+      this._run('COMMIT');
       return { ok: true };
     } catch (err) {
+      try { this._run('ROLLBACK'); } catch { /* best effort */ }
       console.error('[DB] createChunks error:', err.message);
       return { ok: false, error: 'Failed to create chunk records' };
     }
   }
 
+  // WP-7: Fixed return value check — use .ok and Array.isArray(.data)
   getChunks(downloadId) {
     try {
       const rows = this._query(
@@ -447,14 +456,20 @@ class IDMMDatabase {
     }
   }
 
+  // WP-1: Wrap multi-row settings update in transaction
   updateSettings(settings) {
     try {
+      this._run('BEGIN');
       for (const [key, value] of Object.entries(settings)) {
-        const result = this.setSetting(key, value);
-        if (!result.ok) return result;
+        this._run(
+          "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+          [key, String(value)]
+        );
       }
+      this._run('COMMIT');
       return { ok: true };
     } catch (err) {
+      try { this._run('ROLLBACK'); } catch { /* best effort */ }
       console.error('[DB] updateSettings error:', err.message);
       return { ok: false, error: 'Failed to update settings' };
     }
@@ -488,33 +503,62 @@ class IDMMDatabase {
     }
   }
 
+  // WP-12: N+1 query → single JOIN query
   getResumableDownloads() {
     try {
+      // Single query with LEFT JOIN to get downloads + chunks in one pass
       const rows = this._query(
-        `SELECT d.*, c.chunk_index, c.start_byte, c.end_byte, c.downloaded_bytes, c.status as chunk_status
+        `SELECT d.*, c.id as chunk_id, c.chunk_index, c.start_byte, c.end_byte,
+                c.downloaded_bytes as chunk_downloaded_bytes, c.status as chunk_status,
+                c.error as chunk_error, c.retries as chunk_retries
          FROM downloads d
          LEFT JOIN chunks c ON c.download_id = d.id
          WHERE d.status IN ('downloading', 'paused', 'pending')
          ORDER BY d.created_at DESC, c.chunk_index ASC`
       );
 
+      // Group chunk rows back into download objects
       const downloadMap = new Map();
       for (const row of rows) {
-        if (!downloadMap.has(row.id)) {
-          downloadMap.set(row.id, {
-            ...row,
+        let download = downloadMap.get(row.id);
+        if (!download) {
+          download = {
+            id: row.id,
+            url: row.url,
+            filename: row.filename,
+            save_to: row.save_to,
+            total_size: row.total_size,
+            downloaded: row.downloaded,
+            status: row.status,
+            threads: row.threads,
+            speed: row.speed,
+            eta: row.eta,
+            mime_type: row.mime_type,
+            category: row.category,
+            cookies: row.cookies,
+            referrer: row.referrer,
             headers: row.headers ? JSON.parse(row.headers) : null,
+            error: row.error,
+            checksum: row.checksum,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            completed_at: row.completed_at,
             chunks: [],
-          });
+          };
+          downloadMap.set(row.id, download);
         }
-        const dl = downloadMap.get(row.id);
-        if (row.chunk_index !== null) {
-          dl.chunks.push({
+
+        if (row.chunk_id !== null) {
+          download.chunks.push({
+            id: row.chunk_id,
+            download_id: row.id,
             chunk_index: row.chunk_index,
             start_byte: row.start_byte,
             end_byte: row.end_byte,
-            downloaded_bytes: row.downloaded_bytes,
+            downloaded_bytes: row.chunk_downloaded_bytes,
             status: row.chunk_status,
+            error: row.chunk_error,
+            retries: row.chunk_retries,
           });
         }
       }

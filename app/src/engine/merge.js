@@ -20,82 +20,76 @@ const path = require('node:path');
  * @param {Function} [options.onProgress] - Progress callback (bytesWritten, total)
  * @returns {Promise<void>}
  */
-async function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
-  // F13: Atomic write — write to temp file first, rename on completion
-  const outDir = path.dirname(outputPath);
-  if (!(await fsp.access(outDir).then(() => true).catch(() => false))) {
-    await fsp.mkdir(outDir, { recursive: true });
-  }
-
-  const tempPath = outputPath + '.part';
-
+function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
   return new Promise((resolve, reject) => {
-    const outputStream = fs.createWriteStream(tempPath);
-    let bytesWritten = 0;
-    let chunkIndex = 0;
+    // F13: Atomic write — write to temp file first, rename on completion
+    const outDir = path.dirname(outputPath);
+    // WP-10: Use fsp.access instead of fs.existsSync
+    fsp.access(outDir).catch(() => fsp.mkdir(outDir, { recursive: true })).then(() => {
+      const tempPath = outputPath + '.part';
 
-    async function writeNextChunk() {
-      if (chunkIndex >= chunkPaths.length) {
-        outputStream.end(() => {
-          // F13: Atomic rename — on the same filesystem this is guaranteed atomic
-          try {
+      const outputStream = fs.createWriteStream(tempPath);
+      let bytesWritten = 0;
+      let chunkIndex = 0;
+
+      function writeNextChunk() {
+        if (chunkIndex >= chunkPaths.length) {
+          outputStream.end(() => {
+            // F13: Atomic rename — on the same filesystem this is guaranteed atomic
             fs.renameSync(tempPath, outputPath);
             resolve();
-          } catch (err) {
-            // Clean up temp file on rename failure
+          });
+          return;
+        }
+
+        const chunkPath = chunkPaths[chunkIndex];
+        chunkIndex++;
+
+        // WP-10: Use fsp.access instead of fs.existsSync
+        fsp.access(chunkPath).catch(() => {
+          outputStream.destroy();
+          // Clean up temp file
+          try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
+          reject(new Error(`Missing chunk file: ${chunkPath}`));
+          return;
+        }).then(() => {
+          const inputStream = fs.createReadStream(chunkPath);
+
+          inputStream.on('data', (chunk) => {
+            const canContinue = outputStream.write(chunk);
+            bytesWritten += chunk.length;
+            if (onProgress) {
+              onProgress(bytesWritten, totalSize);
+            }
+            // R2: Backpressure — pause reader until writer drains
+            if (!canContinue) {
+              inputStream.pause();
+              outputStream.once('drain', () => inputStream.resume());
+            }
+          });
+
+          inputStream.on('end', () => {
+            writeNextChunk();
+          });
+
+          inputStream.on('error', (err) => {
+            outputStream.destroy();
+            // Clean up temp file
             try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
-            reject(new Error(`Failed to rename temp file: ${err.message}`));
-          }
+            reject(new Error(`Error reading chunk ${chunkPath}: ${err.message}`));
+          });
         });
-        return;
       }
 
-      const chunkPath = chunkPaths[chunkIndex];
-      chunkIndex++;
-
-      if (!(await fsp.access(chunkPath).then(() => true).catch(() => false))) {
+      outputStream.on('error', (err) => {
         outputStream.destroy();
         // Clean up temp file
         try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
-        reject(new Error(`Missing chunk file: ${chunkPath}`));
-        return;
-      }
-
-      const inputStream = fs.createReadStream(chunkPath);
-
-      inputStream.on('data', (chunk) => {
-        const canContinue = outputStream.write(chunk);
-        bytesWritten += chunk.length;
-        if (onProgress) {
-          onProgress(bytesWritten, totalSize);
-        }
-        // R2: Backpressure — pause reader until writer drains
-        if (!canContinue) {
-          inputStream.pause();
-          outputStream.once('drain', () => inputStream.resume());
-        }
+        reject(new Error(`Error writing output: ${err.message}`));
       });
 
-      inputStream.on('end', () => {
-        writeNextChunk();
-      });
-
-      inputStream.on('error', (err) => {
-        outputStream.destroy();
-        // Clean up temp file
-        try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
-        reject(new Error(`Error reading chunk ${chunkPath}: ${err.message}`));
-      });
-    }
-
-    outputStream.on('error', (err) => {
-      outputStream.destroy();
-      // Clean up temp file
-      try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
-      reject(new Error(`Error writing output: ${err.message}`));
-    });
-
-    writeNextChunk();
+      writeNextChunk();
+    }).catch(reject);
   });
 }
 
@@ -107,9 +101,8 @@ async function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
 async function cleanupChunks(chunkPaths, stateFilePath) {
   for (const chunkPath of chunkPaths) {
     try {
-      if (await fsp.access(chunkPath).then(() => true).catch(() => false)) {
-        fs.unlinkSync(chunkPath);
-      }
+      await fsp.access(chunkPath);
+      await fsp.unlink(chunkPath);
     } catch {
       // Best effort cleanup
     }
@@ -117,7 +110,7 @@ async function cleanupChunks(chunkPaths, stateFilePath) {
 }
 
 /**
- * Full merge operation: merge chunks  verify  cleanup.
+ * Full merge operation: merge chunks → verify → cleanup.
  * @param {Object} options
  * @param {string} options.downloadId
  * @param {string[]} options.chunkPaths - Ordered chunk paths
@@ -186,4 +179,3 @@ module.exports = {
   cleanupChunks,
   mergeAndVerify,
 };
-

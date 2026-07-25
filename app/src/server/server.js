@@ -376,11 +376,11 @@ class IDMMServer {
     // GET /api/settings  Get all settings
     this.app.get('/api/settings', (req, res) => {
       try {
-        const settings = this.db.getAllSettings();
-        if (!settings.ok) {
-          return res.status(500).json({ error: settings.error || 'Failed to load settings' });
+        const result = this.db.getAllSettings();
+        if (!result.ok) {
+          return res.status(500).json({ error: result.error || 'Failed to load settings' });
         }
-        res.json(settings);
+        res.json(result.data);
       } catch (err) {
         res.status(500).json({ error: sanitizeError(err) });
       }
@@ -496,36 +496,38 @@ class IDMMServer {
           // Registry method requires a 'key' field in manifest.json which we don't have.
           // Shortcut approach works reliably for unpacked extensions.
           if (browser === 'chrome' || browser === 'edge') {
-            const browserExe = browser === 'chrome'
-              ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe')
-              : path.join('C:', 'Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
-
-            // Check common locations
-            const fs2 = require('node:fs');
-            let exePath = browserExe;
-            if (!fs2.existsSync(exePath)) {
-              // Try Program Files
-              exePath = browser === 'chrome'
+            const chromePaths = [
+              browser === 'chrome'
+                ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe')
+                : path.join('C:', 'Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+              browser === 'chrome'
                 ? path.join('C:', 'Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe')
-                : path.join('C:', 'Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+                : path.join('C:', 'Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+              browser === 'chrome'
+                ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe')
+                : path.join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+            ];
+
+            let exePath = null;
+            for (const p of chromePaths) {
+              if (fs.existsSync(p)) { exePath = p; break; }
             }
-            if (!fs2.existsSync(exePath)) {
-              return res.json({ ok: false, error: `${browser} not found. Is it installed?` });
+            if (!exePath) {
+              return res.json({ ok: false, error: `${browser} not found at common install paths. Is it installed?` });
             }
 
-            const shortcutName = `IDMM - ${browser}.lnk`;
-            const shortcutPath = path.join(os.homedir(), 'Desktop', shortcutName);
-            const psScript = `$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('${shortcutPath}'); $sc.TargetPath = '${exePath}'; $sc.Arguments = '--load-extension="${extensionDir}" --no-first-run'; $sc.IconLocation = '${exePath},0'; $sc.Description = 'Launch ${browser} with IDMM extension'; $sc.Save()`;
-
-            return new Promise((resolve) => {
-              exec(`powershell -NoProfile -Command "${psScript.replace(/"/g, '\\"')}"`, (err) => {
-                if (err) {
-                  resolve(res.json({ ok: false, error: `Failed to create ${browser} shortcut: ${err.message}` }));
-                } else {
-                  resolve(res.json({ ok: true, message: `${browser} shortcut created on Desktop with IDMM extension. Use it to launch ${browser} with IDMM.` }));
-                }
-              });
-            });
+            const batPath = path.join(os.homedir(), 'Desktop', `IDMM - ${browser}.bat`);
+            // Check if extension dir actually exists
+            if (!fs.existsSync(extensionDir)) {
+              return res.json({ ok: false, error: `Extension directory not found at: ${extensionDir}` });
+            }
+            const batContent = `@echo off\r\nREM IDMM - Launch ${browser} with IDMM extension\r\nstart "" "${exePath}" "--load-extension=${extensionDir}" --no-first-run\r\n`;
+            try {
+              fs.writeFileSync(batPath, batContent);
+              return res.json({ ok: true, message: `Shortcut created on Desktop: IDMM - ${browser}.bat. Double-click it to launch ${browser} with IDMM extension.` });
+            } catch (batErr) {
+              return res.json({ ok: false, error: `Failed to create shortcut: ${batErr.message}` });
+            }
           }
 
           // Firefox: copy .xpi to profile directories
@@ -547,7 +549,7 @@ class IDMMServer {
             for (const profile of profiles) {
               const dest = path.join(profilesRoot, profile, 'extensions');
               if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
-              fs.copyFileSync(xpiPath, path.join(dest, 'idmm@idmm.xpi'));
+              fs.copyFileSync(xpiPath, path.join(dest, 'idmm-extension@glitchworlds.xpi'));
             }
             return res.json({ ok: true, message: `Firefox extension installed to ${profiles.length} profile(s). Restart Firefox to apply.` });
           }

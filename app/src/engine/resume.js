@@ -20,12 +20,18 @@ class ResumeManager {
    */
   constructor(tempDir) {
     this.tempDir = tempDir;
-    this._ensureDirSync(tempDir);
+    this._pendingUpdates = {};
+    this._pendingTimers = {};
+    this._initDir = false;
   }
 
-  _ensureDirSync(dir) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+  async _ensureDir() {
+    if (this._initDir) return;
+    this._initDir = true;
+    try {
+      await fsp.access(this.tempDir);
+    } catch {
+      await fsp.mkdir(this.tempDir, { recursive: true });
     }
   }
 

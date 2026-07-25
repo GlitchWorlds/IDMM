@@ -7,15 +7,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validateRedirect } = require('../utils/ssrf');
 
-// E-8: HTTP keep-alive agents for connection reuse
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 1 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 1 });
-
 /**
  * IDMM Chunk Worker Thread.
  *
  * Downloads a specific byte range of a file using HTTP Range requests.
  * Communicates progress back to the main thread via parentPort.
+ *
+ * E-8: Uses HTTP keep-alive agent for connection reuse across requests.
  *
  * workerData: {
  *   url: string,           // Download URL
@@ -42,6 +40,20 @@ const {
   downloadId,
   speedLimit = 0,
 } = workerData;
+
+// E-8: Persistent HTTP keep-alive agents for connection reuse
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 1000,
+  maxSockets: 1, // One socket per worker (each worker is single-threaded)
+  maxFreeSockets: 0,
+});
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 1000,
+  maxSockets: 1,
+  maxFreeSockets: 0,
+});
 
 /**
  * Send a progress message to the main thread.
@@ -116,6 +128,7 @@ function downloadChunk(attempt, currentUrl, redirectCount = 0) {
         ...extraHeaders,
       },
       timeout: timeout,
+      // E-8: Use keep-alive agent for connection reuse
       agent: isHttps ? httpsAgent : httpAgent,
     };
 
@@ -127,32 +140,32 @@ function downloadChunk(attempt, currentUrl, redirectCount = 0) {
           reject(new Error(`Too many redirects (max 5) for chunk ${chunkIndex}`));
           return;
         }
-        // R1: SSRF  validate redirect target before following
+        // R1: SSRF — validate redirect target before following
         try { validateRedirect(res.headers.location, currentUrl); } catch (e) { reject(e); return; }
-        // Follow redirect  use updated URL
+        // Follow redirect — use updated URL
         const newUrl = new URL(res.headers.location, currentUrl).href;
         resolve(downloadChunk(attempt, newUrl, redirectCount + 1)); // retry with new URL
         return;
       }
 
-      // 416 Range Not Satisfiable  chunk may already be complete
+      // 416 Range Not Satisfiable — chunk may already be complete
       if (res.statusCode === 416) {
         report('chunk_done', { downloaded: totalChunkSize, totalBytes: totalChunkSize });
         resolve();
         return;
       }
 
-      // Server doesn't support Range  but we asked for it, so 200 means full file
+      // Server doesn't support Range — but we asked for it, so 200 means full file
       if (res.statusCode === 200) {
         report('error', {
-          message: 'Server returned 200 for Range request  Range not supported',
+          message: 'Server returned 200 for Range request — Range not supported',
           noRangeSupport: true,
         });
         reject(new Error('NO_RANGE_SUPPORT'));
         return;
       }
 
-      // 429 Too Many Requests  report as throttle so parent can reduce threads
+      // 429 Too Many Requests — report as throttle so parent can reduce threads
       if (res.statusCode === 429) {
         res.resume(); // Drain response body
         const retryAfter = parseInt(res.headers['retry-after'], 10) || 0;
@@ -267,14 +280,19 @@ async function main() {
     try {
       report('attempt', { attempt, maxRetries });
       await downloadChunk(attempt, url);
-      // Success  R5: Allow final postMessage to flush before exiting
+      // Success — R5: Allow final postMessage to flush before exiting
+      // E-8: Destroy keep-alive agents before exit
+      httpAgent.destroy();
+      httpsAgent.destroy();
       setTimeout(() => process.exit(0), 100);
       return;
     } catch (err) {
       lastError = err;
 
-      // If server doesn't support Range, don't retry  report immediately
+      // If server doesn't support Range, don't retry — report immediately
       if (err.message === 'NO_RANGE_SUPPORT') {
+        httpAgent.destroy();
+        httpsAgent.destroy();
         // R5: Allow final postMessage to flush before exiting
         setTimeout(() => process.exit(1), 100);
         return;
@@ -303,6 +321,9 @@ async function main() {
     message: `Chunk ${chunkIndex} failed after ${maxRetries} attempts: ${lastError?.message}`,
     exhausted: true,
   });
+  // E-8: Destroy keep-alive agents before exit
+  httpAgent.destroy();
+  httpsAgent.destroy();
   // R5: Allow final postMessage to flush before exiting
   setTimeout(() => process.exit(1), 100);
 }
@@ -311,7 +332,9 @@ main().catch((err) => {
   console.error(`[chunk-worker] Fatal error for chunk ${chunkIndex} (download ${downloadId}): ${err.message}`);
   console.error(`[chunk-worker] Stack: ${err.stack}`);
   report('error', { message: `Worker fatal: ${err.message} (${err.stack})` });
+  // E-8: Destroy keep-alive agents before exit
+  httpAgent.destroy();
+  httpsAgent.destroy();
   // R5: Allow final postMessage to flush before exiting
   setTimeout(() => process.exit(1), 100);
 });
-

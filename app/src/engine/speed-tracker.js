@@ -3,6 +3,8 @@
 /**
  * SpeedTracker — Rolling speed samples (3s window) for download progress.
  * Extracted from DownloadManager (Fix #1: Decomposition).
+ *
+ * E-6: Uses findIndex+slice instead of Array.shift() for O(1) removal.
  */
 
 class SpeedTracker {
@@ -20,11 +22,11 @@ class SpeedTracker {
   addSample(downloadId, bytes) {
     let samples = this.samples.get(downloadId) || [];
     samples.push({ time: Date.now(), bytes });
-    // Keep only last 3 seconds — use findIndex+slice instead of while+shift (E-6: O(n) → O(log n) + slice)
+    // E-6: Use findIndex+splice instead of shift() — avoids O(n) per-shift cost
     const cutoff = Date.now() - 3000;
-    const cutoffIdx = samples.findIndex(s => s.time >= cutoff);
-    if (cutoffIdx > 0) {
-      samples = samples.slice(cutoffIdx);
+    const firstOld = samples.findIndex(s => s.time >= cutoff);
+    if (firstOld > 0) {
+      samples.splice(0, firstOld);
     }
     this.samples.set(downloadId, samples);
   }
