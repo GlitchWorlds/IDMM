@@ -493,19 +493,18 @@ class IDMMServer {
 
         if (platform === 'win32') {
           // Chrome/Edge: create desktop shortcut with --load-extension flag
-          // Registry method requires a 'key' field in manifest.json which we don't have.
-          // Shortcut approach works reliably for unpacked extensions.
+          // Now with 'key' field in manifest.json, extension ID is stable.
           if (browser === 'chrome' || browser === 'edge') {
             const chromePaths = [
               browser === 'chrome'
-                ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe')
+                ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe')
                 : path.join('C:', 'Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
               browser === 'chrome'
                 ? path.join('C:', 'Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe')
                 : path.join('C:', 'Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
               browser === 'chrome'
-                ? path.join(os.homedir(), 'AppData', 'Local', 'Google', 'Chrome', 'Application', 'chrome.exe')
-                : path.join(os.homedir(), 'AppData', 'Local', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+                ? path.join(process.env.LOCALAPPDATA, 'Microsoft', 'Edge', 'Application', 'msedge.exe')
+                : path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe'),
             ];
 
             let exePath = null;
@@ -513,21 +512,35 @@ class IDMMServer {
               if (fs.existsSync(p)) { exePath = p; break; }
             }
             if (!exePath) {
-              return res.json({ ok: false, error: `${browser} not found at common install paths. Is it installed?` });
+              return res.json({ ok: false, error: `${browser} not found. Is it installed?` });
             }
 
-            const batPath = path.join(os.homedir(), 'Desktop', `IDMM - ${browser}.bat`);
             // Check if extension dir actually exists
             if (!fs.existsSync(extensionDir)) {
               return res.json({ ok: false, error: `Extension directory not found at: ${extensionDir}` });
             }
-            const batContent = `@echo off\r\nREM IDMM - Launch ${browser} with IDMM extension\r\nstart "" "${exePath}" "--load-extension=${extensionDir}" --no-first-run\r\n`;
-            try {
-              fs.writeFileSync(batPath, batContent);
-              return res.json({ ok: true, message: `Shortcut created on Desktop: IDMM - ${browser}.bat. Double-click it to launch ${browser} with IDMM extension.` });
-            } catch (batErr) {
-              return res.json({ ok: false, error: `Failed to create shortcut: ${batErr.message}` });
-            }
+
+            // Use PowerShell to create a proper .lnk shortcut (handles paths with spaces correctly)
+            const shortcutPath = path.join(os.homedir(), 'Desktop', `IDMM - ${browser}.lnk`);
+            const psCmd = `$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}'); $sc.TargetPath = '${exePath.replace(/'/g, "''")}'; $sc.Arguments = '--load-extension="${extensionDir}" --no-first-run'; $sc.Description = '${browser} with IDMM extension'; $sc.Save()`;
+
+            return new Promise((resolve) => {
+              exec(`powershell -NoProfile -Command "${psCmd}"`, { maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+                if (err) {
+                  // Fallback: write .bat file instead
+                  try {
+                    const batPath = path.join(os.homedir(), 'Desktop', `IDMM - ${browser}.bat`);
+                    const batContent = '@echo off\r\nsetlocal\r\nset "EXT=' + extensionDir + '\r\nstart "" "' + exePath + '" "--load-extension=%EXT%" --no-first-run\r\n';
+                    fs.writeFileSync(batPath, batContent);
+                    resolve(res.json({ ok: true, message: `Shortcut created on Desktop: IDMM - ${browser}.bat. Double-click to launch ${browser} with IDMM extension.` }));
+                  } catch {
+                    resolve(res.json({ ok: false, error: `Failed: ${err.message}. Manual: Open chrome://extensions, enable Developer Mode, click "Load unpacked", select: ${extensionDir}` }));
+                  }
+                } else {
+                  resolve(res.json({ ok: true, message: `Desktop shortcut created: IDMM - ${browser}.lnk. Use it to launch ${browser} with IDMM extension.` }));
+                }
+              });
+            });
           }
 
           // Firefox: copy .xpi to profile directories
