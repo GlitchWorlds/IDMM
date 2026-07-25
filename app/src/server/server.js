@@ -501,9 +501,13 @@ class IDMMServer {
               : 'HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist';
             const updateUrl = 'https://clients2.google.com/service/update2/crx';
 
-            const psCmd = 'Start-Process powershell -Verb RunAs -ArgumentList \'-NoProfile -Command "reg add ' + policyKey + ' /v 1 /t REG_SZ /d \\"oacdlfdjmjepdjgcjhdihbfemioifhao;' + updateUrl + '\\" /f"\'';
-
-            exec(psCmd, { timeout: 5000 }, () => {});
+            // Write temp batch file - launched via elevated cmd.exe
+            const batPath = require('path').join(require('os').tmpdir(), 'idmm_inst_ext.bat');
+            require('fs').writeFileSync(batPath, '@echo off\r\nreg add \"' + policyKey + '\" /v 1 /t REG_SZ /d \"oacdlfdjmjepdjgcjhdihbfemioifhao;' + updateUrl + '\" /f\r\npause\r\n', 'utf8');
+            const psCmd = 'powershell -NoProfile -Command \"Start-Process cmd -Verb RunAs -ArgumentList \'/c \"' + batPath + '\"\'\"';
+            exec(psCmd, { timeout: 5000 }, () => {
+              try { require('fs').unlinkSync(batPath); } catch {}
+            });
             return res.json({ ok: true, message: 'Admin PowerShell opened. Click Yes on UAC prompt to install extension.' });
           }
 
