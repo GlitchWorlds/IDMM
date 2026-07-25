@@ -32,6 +32,7 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
   // Mark dirty on any setting change
   const updateSetting = useCallback((key, value) => {
     setSettings((prev) => {
+      if (prev[key] === value) return prev; // No actual change — skip
       const next = { ...prev, [key]: value };
       isDirtyRef.current = true;
       if (onDirtyChange) onDirtyChange(true);
@@ -85,10 +86,11 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
 
   // Handle theme change — mark dirty
   const handleThemeChange = useCallback((value) => {
+    if (value === theme) return; // No actual change
     onThemeChange(value);
     isDirtyRef.current = true;
     if (onDirtyChange) onDirtyChange(true);
-  }, [onThemeChange, onDirtyChange]);
+  }, [theme, onThemeChange, onDirtyChange]);
 
   if (loading) {
     return (

@@ -1,16 +1,16 @@
-# Graph Report - IDMM  (2026-07-25)
+# Graph Report - IDMM  (2026-07-24)
 
 ## Corpus Check
-- 80 files · ~64,521 words
+- 62 files · ~53,128 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 999 nodes · 1212 edges · 55 communities (52 shown, 3 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 25 edges (avg confidence: 0.51)
+- 847 nodes · 1027 edges · 51 communities (48 shown, 3 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `578f3991`
+- Built from commit: `5882017f`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -64,62 +64,59 @@
 - 8. API SPECIFICATION
 - 11. CATATAN TEKNIS
 - 1. VISI & MISI
-- fix_complete.js
-- debug_line.js
-- new_block.js
 
 ## God Nodes (most connected - your core abstractions)
 1. `DownloadManager` - 35 edges
-2. `IDMMDatabase` - 30 edges
+2. `IDMMDatabase` - 29 edges
 3. `ResumeManager` - 15 edges
-4. `DownloadScheduler` - 15 edges
-5. `nsis` - 15 edges
-6. `ClipboardMonitor` - 14 edges
-7. `IDMM Security & Quality Audit Report` - 14 edges
-8. `IDMM  Internet Download Manager Max` - 13 edges
-9. `request()` - 12 edges
-10. `1. Exported Functions & API Endpoints` - 12 edges
+4. `nsis` - 15 edges
+5. `IDMM Security & Quality Audit Report` - 14 edges
+6. `IDMM  Internet Download Manager Max` - 13 edges
+7. `request()` - 12 edges
+8. `1. Exported Functions & API Endpoints` - 12 edges
+9. `3. Test Scenarios` - 12 edges
+10. `IDMM v3 Security + Quality Audit Report` - 12 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `validateUrl()` --calls--> `isBlockedHost()`  [EXTRACTED]
-  app/src/routes/batch.js → app/src/utils/ssrf.js
-- `processSingleUrl()` --calls--> `validateDnsResolution()`  [EXTRACTED]
-  app/src/routes/batch.js → app/src/utils/ssrf.js
 - `Header()` --calls--> `formatSpeed()`  [EXTRACTED]
   electron/ui/src/components/Header.jsx → electron/ui/src/api.js
 - `SpeedGraph()` --calls--> `formatSpeed()`  [EXTRACTED]
   electron/ui/src/components/SpeedGraph.jsx → electron/ui/src/api.js
 - `downloadChunk()` --calls--> `validateRedirect()`  [EXTRACTED]
   app/src/engine/chunk-worker.js → app/src/utils/ssrf.js
+- `App()` --calls--> `getDownloads()`  [EXTRACTED]
+  electron/ui/src/App.jsx → electron/ui/src/api.js
+- `App()` --calls--> `getStats()`  [EXTRACTED]
+  electron/ui/src/App.jsx → electron/ui/src/api.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (55 total, 3 thin omitted)
+## Communities (51 total, 3 thin omitted)
 
 ### Community 0 - "api.js"
 Cohesion: 0.12
 Nodes (28): addDownload(), cancelDownload(), deleteDownload(), formatBytes(), formatETA(), formatSpeed(), getDownload(), getDownloads() (+20 more)
 
 ### Community 1 - "downloader.js"
-Cohesion: 0.07
-Nodes (37): { detectMime, resolveCategory }, DownloadQueue, fs, fsp, _globalWorkerSemaphore, http, https, { mergeAndVerify } (+29 more)
+Cohesion: 0.05
+Nodes (51): downloadChunk(), fs, http, https, main(), { parentPort, workerData }, parseUrl(), path (+43 more)
 
 ### Community 2 - "nsis"
 Cohesion: 0.05
-Nodes (38): build, appId, asar, copyright, directories, extraResources, files, nsis (+30 more)
+Nodes (37): build, appId, asar, copyright, directories, extraResources, files, nsis (+29 more)
 
 ### Community 4 - "electron/package.json"
 Cohesion: 0.06
 Nodes (34): concurrently, electron, electron-builder, author, dependencies, cors, express, helmet (+26 more)
 
 ### Community 5 - "IDMMDatabase"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (5): fs, fsp, IDMMDatabase, initSqlJs, path
 
 ### Community 6 - "manifest.json"
 Cohesion: 0.06
-Nodes (33): action, default_icon, default_title, background, service_worker, browser_specific_settings, gecko, content_scripts (+25 more)
+Nodes (32): action, default_icon, default_title, background, service_worker, browser_specific_settings, gecko, content_scripts (+24 more)
 
 ### Community 7 - "integration.test.js"
 Cohesion: 0.05
@@ -134,16 +131,16 @@ Cohesion: 0.08
 Nodes (24): dependencies, react, react-dom, recharts, devDependencies, tailwindcss, @tailwindcss/vite, vite (+16 more)
 
 ### Community 10 - "ResumeManager"
-Cohesion: 0.18
+Cohesion: 0.19
 Nodes (4): fs, fsp, path, ResumeManager
 
 ### Community 11 - "server.js"
-Cohesion: 0.07
-Nodes (32): CATEGORIES_FILE, createCategoriesRouter(), crypto, DEFAULT_CATEGORIES, express, fs, fsp, generateCategoryId() (+24 more)
+Cohesion: 0.19
+Nodes (9): cors, express, helmet, http, IDMMServer, path, SAFE_ERROR_PATTERNS, sanitizeError() (+1 more)
 
 ### Community 12 - "electron/main.js"
-Cohesion: 0.10
-Nodes (15): { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain }, APP_DIR, ClipboardMonitor, DATA_DIR, DB_PATH, DEFAULT_SAVE_PATH, DownloadManager, fs (+7 more)
+Cohesion: 0.11
+Nodes (14): { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain }, APP_DIR, DATA_DIR, DB_PATH, DEFAULT_SAVE_PATH, DownloadManager, fs, gotLock (+6 more)
 
 ### Community 13 - "1. Exported Functions & API Endpoints"
 Cohesion: 0.06
@@ -190,8 +187,8 @@ Cohesion: 0.11
 Nodes (17): File-by-File Summary, IDMM Security & Quality Audit Report, P0  Fix Before Release, P1  Fix Soon, P2  Improve When Convenient, Priority Remediation Plan, Q1  Error Handling, Q2  Resource Management (+9 more)
 
 ### Community 28 - "🚀 IDMM — Internet Download Manager Max"
-Cohesion: 0.05
-Nodes (36): Changelog, QC & Security Update, [v1.2.0] - 2026-07-20, 1. Arsitektur Proyek & Tech Stack, 2. Spesifikasi Fitur Terkini, 3. Changelog Ringkas, 4. Aturan Pengembangan (SOP), A. Core Engine (Backend) (+28 more)
+Cohesion: 0.11
+Nodes (18): 🏗️ Architecture, Browser Extension, 🛠️ Build From Source, Core Engine, 🙏 Credits, Desktop UI (Electron + React), 📝 Documentation, 📦 Download & Install (+10 more)
 
 ### Community 29 - "Security Checklist"
 Cohesion: 0.12
@@ -230,8 +227,8 @@ Cohesion: 0.18
 Nodes (10): 1. src/components/Sidebar.jsx, 2. src/components/Header.jsx, 3. src/components/DownloadList.jsx, 4. src/components/AddDownload.jsx, 5. src/components/SpeedGraph.jsx, 6. src/components/Settings.jsx, Context, IDMM Phase 3 - Complete React UI Components (+2 more)
 
 ### Community 38 - "Dokumentasi Produksi IDMM (Internet Download Manager Max)"
-Cohesion: 0.11
-Nodes (23): downloadChunk(), fs, http, httpAgent, https, httpsAgent, main(), { parentPort, workerData } (+15 more)
+Cohesion: 0.18
+Nodes (11): 1. Arsitektur Proyek & Tech Stack, 2. Spesifikasi Fitur Terkini, 3. Changelog Ringkas, 4. Aturan Pengembangan (SOP), A. Core Engine (Backend), B. User Interface (UI) - Electron & React, C. Ekstensi Browser, D. Testing (+3 more)
 
 ### Community 39 - "IDMM Extension Fix Task  v5"
 Cohesion: 0.20
@@ -242,12 +239,12 @@ Cohesion: 0.25
 Nodes (7): Data Flow Diagram, End-to-End Download Flow, File System Layout, IDMM  Workflow Analysis, Key Architectural Decisions, Known Limitations (v1), Pause/Resume Flow
 
 ### Community 41 - "IDMM  Internet Download Manager Max"
-Cohesion: 0.07
-Nodes (28): 10. ESTIMASI UKURAN, 11. CATATAN TEKNIS, 1. VISI & MISI, 2. PERBANDINGAN FITUR: IDM vs IDMM, 3. ARSITEKTUR SISTEM, 4.1 Download Engine (Core), 4.2 Local API Server, 4.3 Chrome Extension (IDMM-ext) (+20 more)
+Cohesion: 0.25
+Nodes (8): 10. ESTIMASI UKURAN, 2. PERBANDINGAN FITUR: IDM vs IDMM, 3. ARSITEKTUR SISTEM, 5. STRUKTUR PROJECT, 6. TECH STACK, 9. KEAMANAN, Full System Design Document v1.0, IDMM  Internet Download Manager Max
 
 ### Community 42 - "README.md"
-Cohesion: 0.17
-Nodes (6): DownloadScheduler, { EventEmitter }, fs, fsp, JOBS_FILE, path
+Cohesion: 0.29
+Nodes (3): Changelog, QC & Security Update, [v1.2.0] - 2026-07-20
 
 ### Community 43 - "Task"
 Cohesion: 0.29
@@ -258,60 +255,48 @@ Cohesion: 0.33
 Nodes (5): End-to-End Download Flow (Updated v2), IDMM  Workflow Analysis v2 (Post-Fix), Pause/Resume Flow (Updated v2), Security Hardening (v2), Source Code Stats
 
 ### Community 45 - "4. KOMPONEN DETAIL"
-Cohesion: 0.18
-Nodes (4): { clipboard }, ClipboardMonitor, { EventEmitter }, path
+Cohesion: 0.40
+Nodes (5): 4.1 Download Engine (Core), 4.2 Local API Server, 4.3 Chrome Extension (IDMM-ext), 4.4 Desktop UI, 4. KOMPONEN DETAIL
 
 ### Community 46 - "7. DEVELOPMENT PHASES"
-Cohesion: 0.13
-Nodes (14): 1. Fix async/await bugs in server.js (WP-2, WP-3, WP-6), 1. Missing Features, 2. Migrate from sql.js to better-sqlite3 (E-1, E-2, WP-1), 2. Wrong Processes, 3. Efficiency Issues, 3. Wire `_processQueue()` into completion/cancellation flow (WP-4), 4. Batch WebSocket broadcasts (WP-8, E-4), 4. Confidence (+6 more)
+Cohesion: 0.40
+Nodes (5): 7. DEVELOPMENT PHASES, Phase 1: Core Engine (Week 1), Phase 2: Local API + Extension (Week 1-2), Phase 3: Desktop UI (Week 2), Phase 4: Polish & Package (Week 2-3)
 
 ### Community 47 - "IDMM v1.2.0"
-Cohesion: 0.14
-Nodes (13): beforeSecond, content, dupBlock, first, firstComment, firstIf, fs, linuxIdx (+5 more)
+Cohesion: 0.40
+Nodes (4): Bugs Fixed, Cara Verifikasi, Full QC Audit Updates, IDMM v1.2.0
 
 ### Community 48 - "8. API SPECIFICATION"
-Cohesion: 0.20
-Nodes (9): beforeLinux, closeBraceIdx, content, fs, linuxIdx, linuxLineStart, newBlock, oldSection (+1 more)
+Cohesion: 0.50
+Nodes (4): 8. API SPECIFICATION, GET /api/download/:id, POST /api/download, WebSocket /ws
 
 ### Community 49 - "11. CATATAN TEKNIS"
-Cohesion: 0.25
-Nodes (7): afterOpenFolder, afterStats, content, fs, newBlock, ofIdx, statsIdx
+Cohesion: 0.67
+Nodes (3): 11. CATATAN TEKNIS, Edge Cases, Multi-threaded Download  Cara Kerja
 
 ### Community 50 - "1. VISI & MISI"
-Cohesion: 0.29
-Nodes (6): content, fs, linuxIdx, newBlock, oldSection, urlIdx
-
-### Community 51 - "fix_complete.js"
-Cohesion: 0.40
-Nodes (4): content, fs, linuxIdx, win32Idx
-
-### Community 52 - "debug_line.js"
-Cohesion: 0.50
-Nodes (3): content, fs, lines
-
-### Community 53 - "new_block.js"
-Cohesion: 0.50
-Nodes (3): batPath, browserExeNames, browserPaths
+Cohesion: 0.67
+Nodes (3): 1. VISI & MISI, Misi, Visi
 
 ## Knowledge Gaps
-- **560 isolated node(s):** `http`, `path`, `os`, `fs`, `crypto` (+555 more)
+- **469 isolated node(s):** `http`, `path`, `os`, `fs`, `crypto` (+464 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `DownloadManager` connect `DownloadManager` to `downloader.js`, `Dokumentasi Produksi IDMM (Internet Download Manager Max)`?**
-  _High betweenness centrality (0.015) - this node is a cross-community bridge._
+- **Why does `DownloadManager` connect `DownloadManager` to `downloader.js`?**
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
 - **What connects `http`, `path`, `os` to the rest of the system?**
-  _560 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _469 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `api.js` be split into smaller, more focused modules?**
   _Cohesion score 0.11614401858304298 - nodes in this community are weakly interconnected._
 - **Should `downloader.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.06533776301218161 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05028248587570622 - nodes in this community are weakly interconnected._
 - **Should `nsis` be split into smaller, more focused modules?**
-  _Cohesion score 0.05263157894736842 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05405405405405406 - nodes in this community are weakly interconnected._
 - **Should `DownloadManager` be split into smaller, more focused modules?**
-  _Cohesion score 0.12878787878787878 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.12310606060606061 - nodes in this community are weakly interconnected._
 - **Should `electron/package.json` be split into smaller, more focused modules?**
   _Cohesion score 0.05714285714285714 - nodes in this community are weakly interconnected._

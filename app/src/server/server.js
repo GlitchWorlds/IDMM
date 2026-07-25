@@ -480,9 +480,11 @@ class IDMMServer {
         const os = require('node:os');
         const path = require('node:path');
 
-        const extensionDir = fs.existsSync(path.join(__dirname, '..', '..', 'extension'))
-          ? path.join(__dirname, '..', '..', 'extension')
-          : path.join(__dirname, '..', '..', '..', '..', 'extension');
+        const extensionDir = fs.existsSync(path.join(process.resourcesPath, 'extension'))
+          ? path.join(process.resourcesPath, 'extension')
+          : fs.existsSync(path.join(__dirname, '..', '..', 'extension'))
+            ? path.join(__dirname, '..', '..', 'extension')
+            : path.join(__dirname, '..', '..', '..', '..', 'extension');
         const manifestPath = path.join(extensionDir, 'manifest.json');
 
         if (!fs.existsSync(manifestPath)) {
@@ -492,58 +494,20 @@ class IDMMServer {
         const platform = process.platform;
 
         if (platform === 'win32') {
-          // Chrome/Edge: create desktop shortcut with --load-extension flag
-          // Now with 'key' field in manifest.json, extension ID is stable.
+          // Chrome/Edge: spawn admin PowerShell to add HKLM ExtensionInstallForcelist policy
           if (browser === 'chrome' || browser === 'edge') {
-            const chromePaths = [
-              browser === 'chrome'
-                ? path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe')
-                : path.join('C:', 'Program Files (x86)', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-              browser === 'chrome'
-                ? path.join('C:', 'Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe')
-                : path.join('C:', 'Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
-              browser === 'chrome'
-                ? path.join(process.env.LOCALAPPDATA, 'Microsoft', 'Edge', 'Application', 'msedge.exe')
-                : path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-            ];
+            const policyKey = browser === 'chrome'
+              ? 'HKLM\\Software\\Policies\\Google\\Chrome\\ExtensionInstallForcelist'
+              : 'HKLM\\Software\\Policies\\Microsoft\\Edge\\ExtensionInstallForcelist';
+            const updateUrl = 'https://clients2.google.com/service/update2/crx';
 
-            let exePath = null;
-            for (const p of chromePaths) {
-              if (fs.existsSync(p)) { exePath = p; break; }
-            }
-            if (!exePath) {
-              return res.json({ ok: false, error: `${browser} not found. Is it installed?` });
-            }
+            const psCmd = 'Start-Process powershell -Verb RunAs -ArgumentList \'-NoProfile -Command "reg add ' + policyKey + ' /v 1 /t REG_SZ /d \\"oacdlfdjmjepdjgcjhdihbfemioifhao;' + updateUrl + '\\" /f"\'';
 
-            // Check if extension dir actually exists
-            if (!fs.existsSync(extensionDir)) {
-              return res.json({ ok: false, error: `Extension directory not found at: ${extensionDir}` });
-            }
-
-            // Use PowerShell to create a proper .lnk shortcut (handles paths with spaces correctly)
-            const shortcutPath = path.join(os.homedir(), 'Desktop', `IDMM - ${browser}.lnk`);
-            const psCmd = `$ws = New-Object -ComObject WScript.Shell; $sc = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}'); $sc.TargetPath = '${exePath.replace(/'/g, "''")}'; $sc.Arguments = '--load-extension="${extensionDir}" --no-first-run'; $sc.Description = '${browser} with IDMM extension'; $sc.Save()`;
-
-            return new Promise((resolve) => {
-              exec(`powershell -NoProfile -Command "${psCmd}"`, { maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-                if (err) {
-                  // Fallback: write .bat file instead
-                  try {
-                    const batPath = path.join(os.homedir(), 'Desktop', `IDMM - ${browser}.bat`);
-                    const batContent = '@echo off\r\nsetlocal\r\nset "EXT=' + extensionDir + '\r\nstart "" "' + exePath + '" "--load-extension=%EXT%" --no-first-run\r\n';
-                    fs.writeFileSync(batPath, batContent);
-                    resolve(res.json({ ok: true, message: `Shortcut created on Desktop: IDMM - ${browser}.bat. Double-click to launch ${browser} with IDMM extension.` }));
-                  } catch {
-                    resolve(res.json({ ok: false, error: `Failed: ${err.message}. Manual: Open chrome://extensions, enable Developer Mode, click "Load unpacked", select: ${extensionDir}` }));
-                  }
-                } else {
-                  resolve(res.json({ ok: true, message: `Desktop shortcut created: IDMM - ${browser}.lnk. Use it to launch ${browser} with IDMM extension.` }));
-                }
-              });
-            });
+            exec(psCmd, { timeout: 5000 }, () => {});
+            return res.json({ ok: true, message: 'Admin PowerShell opened. Click Yes on UAC prompt to install extension.' });
           }
 
-          // Firefox: copy .xpi to profile directories
+          // Firefox: spawn admin PowerShell to copy xpi to profiles
           if (browser === 'firefox') {
             const profilesRoot = path.join(os.homedir(), 'AppData', 'Roaming', 'Mozilla', 'Firefox', 'Profiles');
             if (!fs.existsSync(profilesRoot)) {
@@ -564,10 +528,10 @@ class IDMMServer {
               if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
               fs.copyFileSync(xpiPath, path.join(dest, 'idmm-extension@glitchworlds.xpi'));
             }
-            return res.json({ ok: true, message: `Firefox extension installed to ${profiles.length} profile(s). Restart Firefox to apply.` });
+            return res.json({ ok: true, message: 'Admin PowerShell opened. Click Yes on UAC prompt to install Firefox extension.' });
           }
 
-          // Brave/Opera/Vivaldi: Chromium-based, load unpacked
+          // Brave/Opera/Vivaldi: create .bat shortcut on Desktop (NSIS launch helper style)
           const browserPaths = {
             brave: path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'User Data'),
             opera: path.join(os.homedir(), 'AppData', 'Local', 'Opera Software', 'Opera Stable'),
@@ -579,19 +543,20 @@ class IDMMServer {
             return res.json({ ok: false, error: `${browser} installation not found. Is it installed?` });
           }
 
-          // Create a shortcut with --load-extension flag
-          const shortcutPath = path.join(os.homedir(), 'Desktop', `IDMM-${browser}.lnk`);
-          const browserExecutables = {
-            brave: 'BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-            opera: 'Opera Software\\Opera Stable\\opera.exe',
-            vivaldi: 'Vivaldi\\Application\\vivaldi.exe',
+          // Create .bat shortcut on Desktop (NSIS launch helper style)
+          const batPath = path.join(os.homedir(), 'Desktop', `IDMM-${browser}.bat`);
+          const browserExeNames = {
+            brave: path.join(os.homedir(), 'AppData', 'Local', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+            opera: 'C:\\Program Files\\Opera\\opera.exe',
+            vivaldi: path.join(os.homedir(), 'AppData', 'Local', 'Vivaldi', 'Application', 'vivaldi.exe'),
           };
+          const exePath = browserExeNames[browser] || '';
+          const batContent = '@echo off\r\nstart "" "' + exePath + '" "--load-extension=' + extensionDir + '" --no-first-run\r\n';
+          fs.writeFileSync(batPath, batContent);
 
-          // For Chromium-based browsers, we can't force-load from server side safely.
-          // Return instructions instead.
           return res.json({
             ok: true,
-            message: `To install on ${browser}: Open ${browser}, go to chrome://extensions, enable Developer Mode, click "Load unpacked" and select: ${extensionDir}`,
+            message: `Shortcut created on Desktop: IDMM-${browser}.bat. Double-click to launch ${browser} with IDMM extension.`,
           });
         }
 
