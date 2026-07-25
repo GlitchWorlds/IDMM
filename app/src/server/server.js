@@ -56,9 +56,10 @@ class IDMMServer {
    * @param {Object} options.db - IDMMDatabase instance
    * @param {Object} options.downloader - DownloadManager instance
    */
-  constructor({ db, downloader }) {
+  constructor({ db, downloader, scheduler }) {
     this.db = db;
     this.downloader = downloader;
+    this.scheduler = scheduler;
     this.app = express();
     this.server = null;
     this.wss = null;
@@ -590,7 +591,7 @@ class IDMMServer {
 
     // --- New feature routes ---
     this.app.use('/api/downloads/batch', createBatchRouter({ downloader: this.downloader }));
-    this.app.use('/api/schedule', createSchedulerRouter({ downloader: this.downloader }));
+    this.app.use('/api/schedule', createSchedulerRouter({ scheduler: this.scheduler }));
     this.app.use('/api/downloads/history', createHistoryRouter({ db: this.db }));
     this.app.use('/api/categories', createCategoriesRouter());
   }

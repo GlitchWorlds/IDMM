@@ -15,6 +15,7 @@ const os = require('node:os');
 const fs = require('node:fs');
 const IDMMDatabase = require('./src/db/sqlite');
 const DownloadManager = require('./src/engine/downloader');
+const DownloadScheduler = require('./src/scheduler');
 const IDMMServer = require('./src/server/server');
 
 //  Configuration 
@@ -123,8 +124,11 @@ async function main() {
     }
   }
 
-  // 5. Start API server
-  const server = new IDMMServer({ db, downloader });
+  // 5. Initialize scheduler
+  const scheduler = new DownloadScheduler({ downloader });
+
+  // 6. Start API server
+  const server = new IDMMServer({ db, downloader, scheduler });
 
   await server.start();
 
@@ -155,7 +159,7 @@ async function main() {
   console.log(`  WS     ws://127.0.0.1:9977/ws                 Real-time progress`);
   console.log('');
 
-  // 6. Graceful shutdown
+  // 7. Graceful shutdown
   const shutdown = async (signal) => {
     console.log(`\n[IDMM] ${signal} received, shutting down...`);
 

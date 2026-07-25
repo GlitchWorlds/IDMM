@@ -570,6 +570,43 @@ class IDMMDatabase {
     }
   }
 
+  getDownloadsWithPagination(page = 1, limit = 20, search = '', status = '') {
+    try {
+      const offset = (page - 1) * limit;
+      let whereClauses = [];
+      let params = [];
+      if (search) {
+        whereClauses.push('(d.filename LIKE ? OR d.url LIKE ?)');
+        params.push(`%${search}%`, `%${search}%`);
+      }
+      if (status) {
+        whereClauses.push('d.status = ?');
+        params.push(status);
+      }
+      const where = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+      const countRow = this._queryOne(`SELECT COUNT(*) as count FROM downloads d ${where}`, params);
+      const total = countRow ? countRow.count : 0;
+      const totalPages = Math.ceil(total / limit);
+
+      const items = this._query(
+        `SELECT d.* FROM downloads d ${where} ORDER BY d.created_at DESC LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      );
+
+      // Parse JSON headers for each row
+      const parsedItems = items.map(row => {
+        row.headers = row.headers ? JSON.parse(row.headers) : null;
+        return row;
+      });
+
+      return { ok: true, data: { items: parsedItems, total, page, limit, totalPages } };
+    } catch (err) {
+      console.error('[DB] getDownloadsWithPagination error:', err.message);
+      return { ok: false, error: 'Failed to paginate downloads' };
+    }
+  }
+
   close() {
     try {
       if (this._saveInterval) {
