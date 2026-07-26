@@ -1,16 +1,16 @@
 # Graph Report - IDMM  (2026-07-26)
 
 ## Corpus Check
-- 72 files · ~61,400 words
+- 72 files · ~61,413 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 948 nodes · 1174 edges · 50 communities (46 shown, 4 thin omitted)
+- 949 nodes · 1175 edges · 50 communities (46 shown, 4 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 25 edges (avg confidence: 0.51)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7e638365`
+- Built from commit: `89b4c0d6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -139,7 +139,7 @@ Nodes (32): CATEGORIES_FILE, createCategoriesRouter(), crypto, DEFAULT_CATEGORIE
 
 ### Community 12 - "electron/main.js"
 Cohesion: 0.10
-Nodes (15): { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain }, APP_DIR, ClipboardMonitor, DATA_DIR, DB_PATH, DEFAULT_SAVE_PATH, DownloadManager, fs (+7 more)
+Nodes (16): { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain }, APP_DIR, ClipboardMonitor, DATA_DIR, DB_PATH, DEFAULT_SAVE_PATH, DownloadManager, DownloadScheduler (+8 more)
 
 ### Community 13 - "1. Exported Functions & API Endpoints"
 Cohesion: 0.06
@@ -270,7 +270,7 @@ Cohesion: 0.38
 Nodes (6): cleanupChunks(), fs, fsp, mergeAndVerify(), mergeChunks(), path
 
 ## Knowledge Gaps
-- **516 isolated node(s):** `http`, `path`, `os`, `fs`, `crypto` (+511 more)
+- **517 isolated node(s):** `http`, `path`, `os`, `fs`, `crypto` (+512 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -280,7 +280,7 @@ _Questions this graph is uniquely positioned to answer:_
 - **Why does `DownloadManager` connect `DownloadManager` to `Dokumentasi Produksi IDMM (Internet Download Manager Max)`, `downloader.js`, `app/main.js`, `IDMM v1.2.0`?**
   _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **What connects `http`, `path`, `os` to the rest of the system?**
-  _516 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _517 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `api.js` be split into smaller, more focused modules?**
   _Cohesion score 0.11614401858304298 - nodes in this community are weakly interconnected._
 - **Should `downloader.js` be split into smaller, more focused modules?**
