@@ -370,6 +370,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return { ok: false, error: err.message };
         }
 
+      case 'SEND_URL_TO_IDMM':
+        try {
+          const result = await IDMM_API.startDownload(message.downloadInfo);
+          return { ok: true, result };
+        } catch (err) {
+          return { ok: false, error: err.message };
+        }
+
       case 'ADD_DOWNLOAD':
         try {
           const result = await IDMM_API.startDownload(message.downloadInfo);
