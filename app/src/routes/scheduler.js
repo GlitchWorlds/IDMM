@@ -20,7 +20,7 @@ function createSchedulerRouter(deps) {
    *
    * Creates a scheduled download job.
    */
-  schedulerRouter.post('/', (req, res) => {
+  schedulerRouter.post('/', async (req, res) => {
     try {
       const { url, schedule, options = {} } = req.body || {};
 
@@ -51,7 +51,7 @@ function createSchedulerRouter(deps) {
    *
    * Lists all scheduled jobs.
    */
-  schedulerRouter.get('/', (req, res) => {
+  schedulerRouter.get('/', async (req, res) => {
     try {
       const jobs = deps.scheduler.listScheduled();
       res.json({ jobs });
@@ -65,7 +65,7 @@ function createSchedulerRouter(deps) {
    *
    * Get a specific scheduled job.
    */
-  schedulerRouter.get('/:jobId', (req, res) => {
+  schedulerRouter.get('/:jobId', async (req, res) => {
     try {
       const job = deps.scheduler.getJob(req.params.jobId);
       if (!job) {
@@ -82,9 +82,9 @@ function createSchedulerRouter(deps) {
    *
    * Cancel a scheduled job.
    */
-  schedulerRouter.delete('/:jobId', (req, res) => {
+  schedulerRouter.delete('/:jobId', async (req, res) => {
     try {
-      const result = deps.scheduler.cancel(req.params.jobId);
+      const result = await deps.scheduler.cancel(req.params.jobId);
       res.json(result);
     } catch (err) {
       const status = err.message.includes('not found') ? 404 : 500;

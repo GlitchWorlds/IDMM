@@ -22,20 +22,18 @@ const path = require('node:path');
  */
 function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
   return new Promise((resolve, reject) => {
-    // F13: Atomic write — write to temp file first, rename on completion
     const outDir = path.dirname(outputPath);
-    // WP-10: Use fsp.access instead of fs.existsSync
+
+    // Ensure output directory exists
     fsp.access(outDir).catch(() => fsp.mkdir(outDir, { recursive: true })).then(() => {
       const tempPath = outputPath + '.part';
-
       const outputStream = fs.createWriteStream(tempPath);
       let bytesWritten = 0;
       let chunkIndex = 0;
 
-      function writeNextChunk() {
+      async function writeNextChunk() {
         if (chunkIndex >= chunkPaths.length) {
           outputStream.end(() => {
-            // F13: Atomic rename — on the same filesystem this is guaranteed atomic
             fs.renameSync(tempPath, outputPath);
             resolve();
           });
@@ -45,46 +43,42 @@ function mergeChunks({ chunkPaths, outputPath, totalSize, onProgress }) {
         const chunkPath = chunkPaths[chunkIndex];
         chunkIndex++;
 
-        // WP-10: Use fsp.access instead of fs.existsSync
-        fsp.access(chunkPath).catch(() => {
+        // Check chunk file exists
+        try {
+          await fsp.access(chunkPath);
+        } catch {
           outputStream.destroy();
-          // Clean up temp file
-          try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
+          try { fs.unlinkSync(tempPath); } catch {}
           reject(new Error(`Missing chunk file: ${chunkPath}`));
           return;
-        }).then(() => {
-          const inputStream = fs.createReadStream(chunkPath);
+        }
 
-          inputStream.on('data', (chunk) => {
-            const canContinue = outputStream.write(chunk);
-            bytesWritten += chunk.length;
-            if (onProgress) {
-              onProgress(bytesWritten, totalSize);
-            }
-            // R2: Backpressure — pause reader until writer drains
-            if (!canContinue) {
-              inputStream.pause();
-              outputStream.once('drain', () => inputStream.resume());
-            }
-          });
+        const inputStream = fs.createReadStream(chunkPath);
 
-          inputStream.on('end', () => {
-            writeNextChunk();
-          });
+        inputStream.on('data', (chunk) => {
+          const canContinue = outputStream.write(chunk);
+          bytesWritten += chunk.length;
+          if (onProgress) onProgress(bytesWritten, totalSize);
+          if (!canContinue) {
+            inputStream.pause();
+            outputStream.once('drain', () => inputStream.resume());
+          }
+        });
 
-          inputStream.on('error', (err) => {
-            outputStream.destroy();
-            // Clean up temp file
-            try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
-            reject(new Error(`Error reading chunk ${chunkPath}: ${err.message}`));
-          });
+        inputStream.on('end', () => {
+          writeNextChunk();
+        });
+
+        inputStream.on('error', (err) => {
+          outputStream.destroy();
+          try { fs.unlinkSync(tempPath); } catch {}
+          reject(new Error(`Error reading chunk ${chunkPath}: ${err.message}`));
         });
       }
 
       outputStream.on('error', (err) => {
         outputStream.destroy();
-        // Clean up temp file
-        try { fs.unlinkSync(tempPath); } catch { /* best effort */ }
+        try { fs.unlinkSync(tempPath); } catch {}
         reject(new Error(`Error writing output: ${err.message}`));
       });
 

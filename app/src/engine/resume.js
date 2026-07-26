@@ -247,9 +247,14 @@ class ResumeManager {
         if (!pending) return;
         delete this._pendingUpdates[key];
 
-        // Async flush — fire and forget (errors logged internally)
+        // Async flush with concurrent guard
+        if (this._flushingIds && this._flushingIds.has(downloadId)) return;
+        if (!this._flushingIds) this._flushingIds = new Set();
+        this._flushingIds.add(downloadId);
         this._flushSingleDownload(downloadId, pending).catch(err => {
           console.error('[Resume] Debounced flush error:', err.message);
+        }).finally(() => {
+          if (this._flushingIds) this._flushingIds.delete(downloadId);
         });
       }, 500);
     }

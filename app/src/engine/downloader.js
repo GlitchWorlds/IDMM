@@ -305,7 +305,7 @@ class DownloadManager {
     }
 
     // Flush all chunk progress to DB and resume file BEFORE terminating
-    this._flushChunkState(state);
+    await this._flushChunkState(state);
 
     // Terminate all worker threads
     for (const worker of state.workers) {
@@ -770,37 +770,32 @@ class DownloadManager {
     await this.resume.saveState(state);
 
     // Spawn workers
-    this._spawnWorkers(state, opts);
+    await this._spawnWorkers(state, opts);
   }
 
   /**
    * Spawn worker threads for each pending/incomplete chunk.
    */
-  _spawnWorkers(state, opts) {
+  async _spawnWorkers(state, opts) {
     // Gap 5: Sort chunks by priority (this download's queue position)
     const pendingChunks = state.chunks.filter(c => c.status !== 'done' && c.status !== 'completed');
 
     for (const chunk of pendingChunks) {
-
       const chunkPath = this.resume.getChunkPath(state.id, chunk.index);
 
-      // For resume: check existing .part file size
+      // For resume: check existing .part file size (await properly to prevent race)
       let existingBytes = 0;
       try {
-        fsp.access(chunkPath).then(() => {
-          return fsp.stat(chunkPath);
-        }).then(stat => {
-          existingBytes = stat.size;
-          const expectedSize = chunk.end - chunk.start + 1;
-          if (existingBytes >= expectedSize) {
-            chunk.status = 'done';
-            chunk.downloaded = expectedSize;
-            return;
-          }
-          chunk.downloaded = existingBytes;
-        }).catch(() => {
-          existingBytes = 0;
-        });
+        await fsp.access(chunkPath);
+        const stat = await fsp.stat(chunkPath);
+        existingBytes = stat.size;
+        const expectedSize = chunk.end - chunk.start + 1;
+        if (existingBytes >= expectedSize) {
+          chunk.status = 'done';
+          chunk.downloaded = expectedSize;
+          continue; // Skip spawning worker for completed chunk
+        }
+        chunk.downloaded = existingBytes;
       } catch {
         existingBytes = 0;
       }
@@ -1050,6 +1045,16 @@ class DownloadManager {
         worker.__terminated = true;
         worker.terminate();
       }
+      // Respawn workers for orphaned chunks after throttle period
+      const state = this.active.get(downloadId);
+      if (state) {
+        setTimeout(() => {
+          const currentState = this.active.get(downloadId);
+          if (currentState && currentState.status === 'downloading') {
+            this._spawnWorkers(currentState).catch(err => console.error('[Throttle respawn]', err.message));
+          }
+        }, 5000); // Resume after 5s
+      }
     }
   }
 
@@ -1128,7 +1133,8 @@ class DownloadManager {
     const globalLimit = parseInt(this.settings.speed_limit_global, 10) || 0;
     if (globalLimit <= 0) return 0;
     const activeWorkers = Math.max(state.workers.filter(w => w && !w.exited).length, 1);
-    return Math.floor(globalLimit / activeWorkers);
+    // Convert KB/s → bytes/s before passing to worker
+    return Math.floor((globalLimit * 1024) / activeWorkers);
   }
 
   /**
@@ -1363,7 +1369,7 @@ class DownloadManager {
     }
 
     this._recalcProgress(state);
-    this._spawnWorkers(state, opts);
+    await this._spawnWorkers(state, opts);
   }
 
   // ── Internal: Progress Tracking ──
