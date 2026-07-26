@@ -1,16 +1,16 @@
-# Graph Report - IDMM  (2026-07-26)
+# Graph Report - IDMM  (2026-07-25)
 
 ## Corpus Check
-- 72 files · ~61,400 words
+- 80 files · ~64,521 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 948 nodes · 1174 edges · 50 communities (46 shown, 4 thin omitted)
+- 999 nodes · 1212 edges · 55 communities (52 shown, 3 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 25 edges (avg confidence: 0.51)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `7e638365`
+- Built from commit: `578f3991`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -63,10 +63,14 @@
 - IDMM v1.2.0
 - 8. API SPECIFICATION
 - 11. CATATAN TEKNIS
+- 1. VISI & MISI
+- fix_complete.js
+- debug_line.js
+- new_block.js
 
 ## God Nodes (most connected - your core abstractions)
 1. `DownloadManager` - 35 edges
-2. `IDMMDatabase` - 31 edges
+2. `IDMMDatabase` - 30 edges
 3. `ResumeManager` - 15 edges
 4. `DownloadScheduler` - 15 edges
 5. `nsis` - 15 edges
@@ -91,15 +95,15 @@
 ## Import Cycles
 - None detected.
 
-## Communities (50 total, 4 thin omitted)
+## Communities (55 total, 3 thin omitted)
 
 ### Community 0 - "api.js"
 Cohesion: 0.12
 Nodes (28): addDownload(), cancelDownload(), deleteDownload(), formatBytes(), formatETA(), formatSpeed(), getDownload(), getDownloads() (+20 more)
 
 ### Community 1 - "downloader.js"
-Cohesion: 0.12
-Nodes (16): { detectMime, resolveCategory }, DownloadQueue, fs, fsp, _globalWorkerSemaphore, http, https, { mergeAndVerify } (+8 more)
+Cohesion: 0.07
+Nodes (37): { detectMime, resolveCategory }, DownloadQueue, fs, fsp, _globalWorkerSemaphore, http, https, { mergeAndVerify } (+29 more)
 
 ### Community 2 - "nsis"
 Cohesion: 0.05
@@ -146,8 +150,8 @@ Cohesion: 0.06
 Nodes (35): 1.10 main.js  Entry Point, 1.11 test.js  Integration Test, 1.1 src/engine/downloader.js  DownloadManager (Class), 1.2 src/engine/chunk-worker.js  Worker Thread, 1.3 src/engine/merge.js  Chunk Merger, 1.4 src/engine/resume.js  ResumeManager (Class), 1.5 src/server/server.js  IDRAMServer (Class), 1.6 src/db/sqlite.js  IDMMDatabase (Class) (+27 more)
 
 ### Community 14 - "app/main.js"
-Cohesion: 0.25
-Nodes (8): ensureUniqueFilename(), filenameFromUrl(), parseContentDisposition(), path, resolveFilename(), sanitizeFilename(), { URL }, RFC-5987
+Cohesion: 0.15
+Nodes (14): DATA_DIR, DB_PATH, DEFAULT_SAVE_PATH, DownloadManager, formatBytes(), fs, IDMMDatabase, IDMMServer (+6 more)
 
 ### Community 15 - "build-xpi.js"
 Cohesion: 0.14
@@ -242,8 +246,8 @@ Cohesion: 0.07
 Nodes (28): 10. ESTIMASI UKURAN, 11. CATATAN TEKNIS, 1. VISI & MISI, 2. PERBANDINGAN FITUR: IDM vs IDMM, 3. ARSITEKTUR SISTEM, 4.1 Download Engine (Core), 4.2 Local API Server, 4.3 Chrome Extension (IDMM-ext) (+20 more)
 
 ### Community 42 - "README.md"
-Cohesion: 0.08
-Nodes (21): DATA_DIR, DB_PATH, DEFAULT_SAVE_PATH, DownloadManager, DownloadScheduler, formatBytes(), fs, IDMMDatabase (+13 more)
+Cohesion: 0.17
+Nodes (6): DownloadScheduler, { EventEmitter }, fs, fsp, JOBS_FILE, path
 
 ### Community 43 - "Task"
 Cohesion: 0.29
@@ -261,33 +265,53 @@ Nodes (4): { clipboard }, ClipboardMonitor, { EventEmitter }, path
 Cohesion: 0.13
 Nodes (14): 1. Fix async/await bugs in server.js (WP-2, WP-3, WP-6), 1. Missing Features, 2. Migrate from sql.js to better-sqlite3 (E-1, E-2, WP-1), 2. Wrong Processes, 3. Efficiency Issues, 3. Wire `_processQueue()` into completion/cancellation flow (WP-4), 4. Batch WebSocket broadcasts (WP-8, E-4), 4. Confidence (+6 more)
 
+### Community 47 - "IDMM v1.2.0"
+Cohesion: 0.14
+Nodes (13): beforeSecond, content, dupBlock, first, firstComment, firstIf, fs, linuxIdx (+5 more)
+
 ### Community 48 - "8. API SPECIFICATION"
-Cohesion: 0.39
-Nodes (7): detectMime(), EXTENSION_TO_MIME, getCategoryFromMime(), MIME_TO_CATEGORY, parseContentType(), path, resolveCategory()
+Cohesion: 0.20
+Nodes (9): beforeLinux, closeBraceIdx, content, fs, linuxIdx, linuxLineStart, newBlock, oldSection (+1 more)
 
 ### Community 49 - "11. CATATAN TEKNIS"
-Cohesion: 0.38
-Nodes (6): cleanupChunks(), fs, fsp, mergeAndVerify(), mergeChunks(), path
+Cohesion: 0.25
+Nodes (7): afterOpenFolder, afterStats, content, fs, newBlock, ofIdx, statsIdx
+
+### Community 50 - "1. VISI & MISI"
+Cohesion: 0.29
+Nodes (6): content, fs, linuxIdx, newBlock, oldSection, urlIdx
+
+### Community 51 - "fix_complete.js"
+Cohesion: 0.40
+Nodes (4): content, fs, linuxIdx, win32Idx
+
+### Community 52 - "debug_line.js"
+Cohesion: 0.50
+Nodes (3): content, fs, lines
+
+### Community 53 - "new_block.js"
+Cohesion: 0.50
+Nodes (3): batPath, browserExeNames, browserPaths
 
 ## Knowledge Gaps
-- **516 isolated node(s):** `http`, `path`, `os`, `fs`, `crypto` (+511 more)
+- **560 isolated node(s):** `http`, `path`, `os`, `fs`, `crypto` (+555 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **4 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `DownloadManager` connect `DownloadManager` to `Dokumentasi Produksi IDMM (Internet Download Manager Max)`, `downloader.js`, `app/main.js`, `IDMM v1.2.0`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
+- **Why does `DownloadManager` connect `DownloadManager` to `downloader.js`, `Dokumentasi Produksi IDMM (Internet Download Manager Max)`?**
+  _High betweenness centrality (0.015) - this node is a cross-community bridge._
 - **What connects `http`, `path`, `os` to the rest of the system?**
-  _516 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _560 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `api.js` be split into smaller, more focused modules?**
   _Cohesion score 0.11614401858304298 - nodes in this community are weakly interconnected._
 - **Should `downloader.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.11764705882352941 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06533776301218161 - nodes in this community are weakly interconnected._
 - **Should `nsis` be split into smaller, more focused modules?**
   _Cohesion score 0.05263157894736842 - nodes in this community are weakly interconnected._
+- **Should `DownloadManager` be split into smaller, more focused modules?**
+  _Cohesion score 0.12878787878787878 - nodes in this community are weakly interconnected._
 - **Should `electron/package.json` be split into smaller, more focused modules?**
   _Cohesion score 0.05714285714285714 - nodes in this community are weakly interconnected._
-- **Should `IDMMDatabase` be split into smaller, more focused modules?**
-  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
