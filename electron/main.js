@@ -30,6 +30,7 @@ const APP_DIR = resolveEngine();
 
 const IDMMDatabase = require(path.join(APP_DIR, 'src', 'db', 'sqlite'));
 const DownloadManager = require(path.join(APP_DIR, 'src', 'engine', 'downloader'));
+const DownloadScheduler = require(path.join(APP_DIR, 'src', 'scheduler'));
 const IDMMServer = require(path.join(APP_DIR, 'src', 'server', 'server'));
 
 const DATA_DIR = path.join(os.homedir(), '.idmm');
@@ -61,7 +62,8 @@ async function startServer() {
     tempDir: TEMP_DIR,
     settings: settingsResult.ok ? settingsResult.data : {},
   });
-  server = new IDMMServer({ db, downloader });
+  const scheduler = new DownloadScheduler({ downloader });
+  server = new IDMMServer({ db, downloader, scheduler });
   await server.start();
 
   // WP-5: Wire onComplete callback — same pattern as app/main.js

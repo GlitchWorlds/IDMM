@@ -316,7 +316,7 @@ class DownloadManager {
     state.workers = [];
 
     // Force progress flush again just in case threads updated slightly before termination
-    this._flushChunkState(state);
+    await this._flushChunkState(state);
 
     state.status = 'paused';
     this.db.updateDownload(downloadId, { status: 'paused' });
@@ -1046,12 +1046,12 @@ class DownloadManager {
         worker.terminate();
       }
       // Respawn workers for orphaned chunks after throttle period
-      const state = this.active.get(downloadId);
-      if (state) {
+      const currentState = this.active.get(state.id);
+      if (currentState) {
         setTimeout(() => {
-          const currentState = this.active.get(downloadId);
-          if (currentState && currentState.status === 'downloading') {
-            this._spawnWorkers(currentState).catch(err => console.error('[Throttle respawn]', err.message));
+          const refreshedState = this.active.get(state.id);
+          if (refreshedState && refreshedState.status === 'downloading') {
+            this._spawnWorkers(refreshedState).catch(err => console.error('[Throttle respawn]', err.message));
           }
         }, 5000); // Resume after 5s
       }

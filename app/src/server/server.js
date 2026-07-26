@@ -533,7 +533,7 @@ class IDMMServer {
               if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
               fs.copyFileSync(xpiPath, path.join(dest, 'idmm-extension@glitchworlds.xpi'));
             }
-            return res.json({ ok: true, message: 'Admin PowerShell opened. Click Yes on UAC prompt to install Firefox extension.' });
+            return res.json({ ok: true, message: `Firefox extension installed to ${profiles.length} profile(s). Restart Firefox to apply.` });
           }
 
           // Brave/Opera/Vivaldi: create .bat shortcut on Desktop (NSIS launch helper style)
