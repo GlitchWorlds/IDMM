@@ -9,7 +9,9 @@
     "downloads",
     "activeTab",
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "notifications",
+    "tabs"
   ],
 
   "host_permissions": [
@@ -29,6 +31,7 @@
   ],
 
   "action": {
+    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
