@@ -282,9 +282,15 @@ setInterval(() => {
 }, 60000);
 
 async function pollDownloads() {
-  if (!serverOnline) return;
-
   try {
+    const online = await IDMM_API.healthCheck();
+    if (!online) {
+      activeDownloadCount = 0;
+      serverOnline = false;
+      updateBadge();
+      return;
+    }
+    serverOnline = true;
     const downloads = await IDMM_API.listDownloads();
     const active = downloads.filter(d =>
       d.status === 'downloading' || d.status === 'merging'
@@ -292,6 +298,7 @@ async function pollDownloads() {
     activeDownloadCount = active.length;
     updateBadge();
   } catch {
+    activeDownloadCount = 0;
     serverOnline = false;
     updateBadge();
   }
@@ -372,7 +379,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'SEND_URL_TO_IDMM':
         try {
+          // Ensure server is checked before sending
+          if (!serverOnline) {
+            serverOnline = await IDMM_API.healthCheck();
+            if (!serverOnline) {
+              return { ok: false, error: 'IDMM server is offline. Please open the IDMM desktop app first.' };
+            }
+          }
           const result = await IDMM_API.startDownload(message.downloadInfo);
+          activeDownloadCount++;
+          updateBadge();
           return { ok: true, result };
         } catch (err) {
           return { ok: false, error: err.message };
