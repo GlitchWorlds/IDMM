@@ -4,28 +4,28 @@
 
 ---
 
-## 🌐 Browser Extension
+## Browser Extension
 
 ### Floating Download Button
 - Saat browsing website, extension mendeteksi semua link yang mengarah ke file unduhan (seperti `.mp4`, `.zip`, `.pdf`, `.exe`, `.mp3`, `.iso`, dan 40+ ekstensi lainnya).
-- Extension akan menampilkan tombol biru **`[IDMM]`** di sebelah link tersebut.
+- Extension akan menampilkan tombol biru **[IDMM]** di sebelah link tersebut.
 - Cukup satu klik pada tombol, file akan langsung dikirim dan didownload oleh IDMM.
 
 ### Auto-Intercept Browser Downloads
-- Jika fitur ini diaktifkan, IDMM akan secara otomatis "membajak" dan mengambil alih proses download dari browser.
+- Jika fitur ini diaktifkan, IDMM akan secara otomatis mengambil alih proses download dari browser.
 - Anda tidak perlu copy-paste link manual; saat Anda klik tombol download bawaan website, IDMM yang akan mengerjakannya.
 
 ### Right-Click Context Menu
-- Klik kanan pada link, gambar, video, atau audio apa saja di halaman web → pilih **"Download with IDMM"**.
-- Anda juga bisa memblok teks yang berisi URL, klik kanan → **"Download selected URL with IDMM"**.
+- Klik kanan pada link, gambar, video, atau audio apa saja di halaman web -> pilih **"Download with IDMM"**.
+- Anda juga bisa memblok teks yang berisi URL, klik kanan -> **"Download selected URL with IDMM"**.
 
 ### Active Badge Indicator
 - Icon IDMM di pojok browser akan menampilkan angka jumlah file yang sedang aktif didownload.
-- Jika desktop app IDMM belum dibuka, icon akan berwarna merah dengan tulisan **`OFF`**.
+- Jika desktop app IDMM belum dibuka, icon akan menampilkan indikator OFF.
 
 ---
 
-## 🖥️ Desktop Application
+## Desktop Application
 
 ### Super Fast Multi-Threaded Engine
 - Kecepatan download diakselerasi dengan memecah file menjadi beberapa bagian (chunk) dan mendownloadnya secara bersamaan (hingga 128 koneksi paralel).
@@ -38,7 +38,7 @@
 
 ### Pause, Resume, & Cancel
 - Download bisa di-pause kapan saja dan dilanjutkan kembali tanpa harus mengulang dari awal.
-- **Auto-Resume Recovery:** Jika komputer mati mendadak atau aplikasi ter-close, progress download tidak akan hilang dan bisa dilanjutkan saat IDMM dibuka kembali.
+- **Auto-Resume Recovery:** Jika komputer mati mendadak atau aplikasi ditutup, progress download tidak akan hilang dan bisa dilanjutkan saat IDMM dibuka kembali.
 
 ### Download Scheduling
 - Jadwalkan kapan file harus mulai didownload.
@@ -68,7 +68,7 @@
 
 ---
 
-## ⚙️ Settings & System
+## Settings & System
 - **Theme Switcher:** Tampilan antarmuka mendukung Dark Mode (Default) dan Light Mode.
 - **Auto-Start:** IDMM bisa dikonfigurasi untuk otomatis menyala di background saat Windows baru dinyalakan.
 - **Auto-Install Extension:** Installer IDMM secara pintar akan mendeteksi browser yang ada di komputer Anda (Chrome, Edge, Brave, Firefox) dan otomatis memasangkan ekstensinya.
