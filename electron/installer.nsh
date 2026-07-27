@@ -1,6 +1,15 @@
-; IDMM NSIS Custom Installer Script v1.2.4
-; Multi-browser extension installer: Chrome, Edge, Brave, Opera, Vivaldi, Firefox
-; Features: auto-start, extension auto-install, desktop shortcuts, uninstall cleanup
+; IDMM NSIS Custom Installer Script v1.3.0
+; Multi-browser extension installer: Chrome, Edge, Brave, Firefox
+; Features: auto-start, extension auto-install via HKCU registry, desktop shortcuts, uninstall cleanup
+;
+; KEY INSIGHT: The extension has a "key" field in manifest.json.
+; For Chromium MV3 with key field, the correct external extension registration
+; is HKCU\Software\<Browser>\Extensions\<id>\ (NOT HKLM ExtensionInstallForcelist).
+; This works WITHOUT publishing to Chrome Web Store / Edge Addons.
+;
+; Firefox uses HKCU registry for native messaging + .xpi copy to profiles.
+;
+; Removed: Opera, Vivaldi (per user request).
 
 ; ============================================================
 ; GLOBAL VARIABLES (set in customInstall, used in customUnInstall)
@@ -8,16 +17,13 @@
 Var /GLOBAL FoundChrome
 Var /GLOBAL FoundEdge
 Var /GLOBAL FoundBrave
-Var /GLOBAL FoundOpera
-Var /GLOBAL FoundVivaldi
 Var /GLOBAL FoundFirefox
 Var /GLOBAL ChromePath
 Var /GLOBAL EdgePath
 Var /GLOBAL BravePath
-Var /GLOBAL OperaPath
-Var /GLOBAL VivaldiPath
 Var /GLOBAL FirefoxPath
 Var /GLOBAL ExtPath
+Var /GLOBAL ExtId
 
 ; ============================================================
 ; CUSTOM INSTALL
@@ -29,8 +35,11 @@ Var /GLOBAL ExtPath
   Pop $1
   Sleep 1000
 
-  ; === Store extension path for use in batch scripts ===
+  ; === Extension path (extraResources copies ../extension → $INSTDIR\resources\extension) ===
   StrCpy $ExtPath "$INSTDIR\resources\extension"
+
+  ; === Chromium extension ID (derived from RSA public key in manifest.json) ===
+  StrCpy $ExtId "oacdlfdjmjepdjgcjhdihbfemioifhao"
 
   ; === Auto-start IDMM on Windows boot ===
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "IDMM" '"$INSTDIR\IDMM.exe" --hidden'
@@ -41,25 +50,25 @@ Var /GLOBAL ExtPath
   StrCpy $FoundChrome "0"
   StrCpy $FoundEdge "0"
   StrCpy $FoundBrave "0"
-  StrCpy $FoundOpera "0"
-  StrCpy $FoundVivaldi "0"
   StrCpy $FoundFirefox "0"
 
   ; --- Chrome ---
-  IfFileExists "$LOCALAPPDATA\Google\Chrome\Application\chrome.exe" 0 +3
+  IfFileExists "$LOCALAPPDATA\Google\Chrome\Application\chrome.exe" 0 ChromeSystemWide
     StrCpy $FoundChrome "1"
     StrCpy $ChromePath "$LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
     Goto ChromeDetected
+  ChromeSystemWide:
   IfFileExists "$PROGRAMFILES\Google\Chrome\Application\chrome.exe" 0 ChromeDetected
     StrCpy $FoundChrome "1"
     StrCpy $ChromePath "$PROGRAMFILES\Google\Chrome\Application\chrome.exe"
   ChromeDetected:
 
   ; --- Edge ---
-  IfFileExists "$PROGRAMFILES(X86)\Microsoft\Edge\Application\msedge.exe" 0 +3
+  IfFileExists "$PROGRAMFILES(X86)\Microsoft\Edge\Application\msedge.exe" 0 EdgeUserMode
     StrCpy $FoundEdge "1"
     StrCpy $EdgePath "$PROGRAMFILES(X86)\Microsoft\Edge\Application\msedge.exe"
     Goto EdgeDetected
+  EdgeUserMode:
   IfFileExists "$LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe" 0 EdgeDetected
     StrCpy $FoundEdge "1"
     StrCpy $EdgePath "$LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
@@ -71,143 +80,81 @@ Var /GLOBAL ExtPath
     StrCpy $BravePath "$LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"
   BraveDetected:
 
-  ; --- Opera ---
-  IfFileExists "$LOCALAPPDATA\Programs\Opera\opera.exe" 0 OperaDetected
-    StrCpy $FoundOpera "1"
-    StrCpy $OperaPath "$LOCALAPPDATA\Programs\Opera\opera.exe"
-  OperaDetected:
-
-  ; --- Vivaldi ---
-  IfFileExists "$LOCALAPPDATA\Vivaldi\Application\vivaldi.exe" 0 VivaldiDetected
-    StrCpy $FoundVivaldi "1"
-    StrCpy $VivaldiPath "$LOCALAPPDATA\Vivaldi\Application\vivaldi.exe"
-  VivaldiDetected:
-
   ; --- Firefox ---
-  IfFileExists "$PROGRAMFILES\Mozilla Firefox\firefox.exe" 0 +3
+  IfFileExists "$PROGRAMFILES\Mozilla Firefox\firefox.exe" 0 FirefoxUserMode
     StrCpy $FoundFirefox "1"
     StrCpy $FirefoxPath "$PROGRAMFILES\Mozilla Firefox\firefox.exe"
     Goto FirefoxDetected
+  FirefoxUserMode:
   IfFileExists "$LOCALAPPDATA\Mozilla Firefox\firefox.exe" 0 FirefoxDetected
     StrCpy $FoundFirefox "1"
     StrCpy $FirefoxPath "$LOCALAPPDATA\Mozilla Firefox\firefox.exe"
   FirefoxDetected:
 
   ; ============================================================
-  ; CHROMIUM EXTENSION INSTALL (Registry policy method)
+  ; CHROMIUM EXTENSION INSTALL (HKCU External Extension Registration)
+  ;
+  ; How this works: Chrome/Edge/Brave scan HKCU\Software\<Browser>\Extensions\<id>\
+  ; on startup for registry entries containing a "path" and "version" key.
+  ; If the extension at that path has a matching "key" field in its
+  ; manifest.json, Chrome loads it as a sideloaded extension with a stable ID.
+  ;
+  ; This is the CORRECT method for unpacked MV3 extensions with key field.
+  ; The old method (HKLM ExtensionInstallForcelist) ONLY works for extensions
+  ; published on Chrome Web Store / Edge Addons.
   ; ============================================================
 
-  ; ============================================================
-  ; CHROMIUM EXTENSION INSTALL (Admin — Registry Policy)
-  ; With admin rights, we can use HKLM which Chrome requires
-  ; for auto-install via Group Policy.
-  ; ============================================================
-
-  ; --- Chrome (HKLM Policy — Admin only) ---
+  ; --- Chrome ---
   StrCmp $FoundChrome "0" SkipChrome
-    ReadRegDword $0 HKLM "Software\Google\Chrome" "Installed"
-    ; Chrome extension ID from generated RSA key
-    StrCpy $0 "oacdlfdjmjepdjgcjhdihbfemioifhao"
-    WriteRegStr HKLM "Software\Policies\Google\Chrome\ExtensionInstallForcelist" "1" "$0;https://clients2.google.com/service/update2/crx"
-    ; Also set for unpacked load (as fallback)
-    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$0" "path" "$ExtPath"
-    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$0" "version" "1.3.0"
-    CreateShortCut "$DESKTOP\IDMM - Chrome.lnk" "$ChromePath" '--load-extension="$ExtPath"' "" "" SW_SHOWNORMAL "" "IDMM - Chrome"
+    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
+    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
   SkipChrome:
 
-  ; --- Edge (HKLM Policy — Admin only) ---
+  ; --- Edge ---
   StrCmp $FoundEdge "0" SkipEdge
-    StrCpy $0 "oacdlfdjmjepdjgcjhdihbfemioifhao"
-    WriteRegStr HKLM "Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" "1" "$0;https://edge.microsoft.com/extensionwebstorebase/v1/crx"
-    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$0" "path" "$ExtPath"
-    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$0" "version" "1.3.0"
-    CreateShortCut "$DESKTOP\IDMM - Edge.lnk" "$EdgePath" '--load-extension="$ExtPath"' "" "" SW_SHOWNORMAL "" "IDMM - Edge"
+    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$ExtId" "path" "$ExtPath"
+    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$ExtId" "version" "1.3.0"
   SkipEdge:
 
-  ; --- Brave ---
+  ; --- Brave (HKCU registry + desktop shortcut fallback) ---
+  ;
+  ; Brave is Chromium-based and supports the same HKCU External Extension
+  ; registration mechanism. We write registry AND create a desktop shortcut
+  ; with --load-extension as a fallback in case Brave has patched this out.
+  ;
   StrCmp $FoundBrave "0" SkipBrave
-    CreateShortCut "$DESKTOP\IDMM - Brave.lnk" "$BravePath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Brave"
+    WriteRegStr HKCU "Software\BraveSoftware\Brave\Extensions\$ExtId" "path" "$ExtPath"
+    WriteRegStr HKCU "Software\BraveSoftware\Brave\Extensions\$ExtId" "version" "1.3.0"
+    CreateShortCut "$DESKTOP\IDMM - Brave.lnk" "$BravePath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Brave (with extension)"
   SkipBrave:
 
-  ; --- Opera ---
-  StrCmp $FoundOpera "0" SkipOpera
-    CreateShortCut "$DESKTOP\IDMM - Opera.lnk" "$OperaPath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Opera"
-  SkipOpera:
-
-  ; --- Vivaldi ---
-  StrCmp $FoundVivaldi "0" SkipVivaldi
-    CreateShortCut "$DESKTOP\IDMM - Vivaldi.lnk" "$VivaldiPath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Vivaldi"
-  SkipVivaldi:
-
   ; ============================================================
-  ; FIREFOX EXTENSION INSTALL (Registry policy method)
+  ; FIREFOX EXTENSION INSTALL
+  ;
+  ; Firefox sideloading via registry:
+  ;   HKCU\Software\Mozilla\Firefox\Extensions\<gecko-id> = path to .xpi
+  ; Firefox reads this on next launch and installs the addon silently.
+  ;
+  ; Additionally, we copy idmm.xpi to all active Firefox profile
+  ; extension directories for broader compatibility.
+  ;
+  ; The .xpi is included via extraResources and extracted to:
+  ;   $INSTDIR\resources\extension\idmm.xpi
+  ; Firefox extension ID (from manifest.json browser_specific_settings.gecko.id):
+  ;   idmm-extension@glitchworlds
   ; ============================================================
   StrCmp $FoundFirefox "0" SkipFirefox
-    ; Firefox supports sideloading via registry (unpacked extension)
-    WriteRegStr HKCU "Software\Mozilla\Firefox\Extensions" "idmm-extension" "$ExtPath"
-    ; Also try to copy .xpi if available (Firefox reads .xpi from this registry path)
-    ; The .xpi is included as extraResource and extracted to $INSTDIR
-    IfFileExists "$INSTDIR\IDMM-Extension-1.2.4.xpi" 0 SkipXpiCopy
-      ; Try to install into active Firefox profiles
-      nsExec::ExecToStack 'cmd /c for /d %%P in ("%APPDATA%\Mozilla\Firefox\Profiles\*.default*") do copy /Y "$INSTDIR\IDMM-Extension-1.2.4.xpi" "%%P\extensions\{idmm-extension-id}@idmm.xpi" >nul 2>&1'
+    ; Step 1: Register via HKCU registry (primary method)
+    WriteRegStr HKCU "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds" "$ExtPath\idmm.xpi"
+
+    ; Step 2: Copy to all active Firefox profiles (belt-and-suspenders)
+    ; The profile extension directory requires the xpi to be named exactly
+    ; as the gecko ID + .xpi extension
+    IfFileExists "$ExtPath\idmm.xpi" 0 SkipXpiCopy
+      nsExec::ExecToStack 'cmd /c for /d %%P in ("%APPDATA%\Mozilla\Firefox\Profiles\*.default*") do copy /Y "$ExtPath\idmm.xpi" "%%P\extensions\idmm-extension@glitchworlds.xpi" >nul 2>&1'
       Pop $0
     SkipXpiCopy:
-    CreateShortCut "$DESKTOP\IDMM - Firefox.lnk" "$FirefoxPath" '--load-extension="$ExtPath"' "" "" SW_SHOWNORMAL "" "IDMM - Firefox"
   SkipFirefox:
-
-  ; ============================================================
-  ; LAUNCH HELPER SCRIPTS (backward compat + fallback)
-  ; ============================================================
-
-  ; --- Chrome launch helper ---
-  StrCmp $FoundChrome "0" SkipChromeBat
-    FileOpen $0 "$INSTDIR\launch-chrome.bat" w
-    FileWrite $0 '@echo off$\r$\n'
-    FileWrite $0 'REM Launch Chrome with IDMM extension$\r$\n'
-    FileWrite $0 'set EXT_PATH=%~dp0resources\extension$\r$\n'
-    FileWrite $0 '"${ChromePath}" --load-extension="%EXT_PATH%" --no-first-run$\r$\n'
-    FileClose $0
-  SkipChromeBat:
-
-  ; --- Edge launch helper ---
-  StrCmp $FoundEdge "0" SkipEdgeBat
-    FileOpen $0 "$INSTDIR\launch-edge.bat" w
-    FileWrite $0 '@echo off$\r$\n'
-    FileWrite $0 'REM Launch Edge with IDMM extension$\r$\n'
-    FileWrite $0 'set EXT_PATH=%~dp0resources\extension$\r$\n'
-    FileWrite $0 '"${EdgePath}" --load-extension="%EXT_PATH%" --no-first-run$\r$\n'
-    FileClose $0
-  SkipEdgeBat:
-
-  ; --- Brave launch helper ---
-  StrCmp $FoundBrave "0" SkipBraveBat
-    FileOpen $0 "$INSTDIR\launch-brave.bat" w
-    FileWrite $0 '@echo off$\r$\n'
-    FileWrite $0 'REM Launch Brave with IDMM extension$\r$\n'
-    FileWrite $0 'set EXT_PATH=%~dp0resources\extension$\r$\n'
-    FileWrite $0 '"${BravePath}" --load-extension="%EXT_PATH%" --no-first-run$\r$\n'
-    FileClose $0
-  SkipBraveBat:
-
-  ; --- Opera launch helper ---
-  StrCmp $FoundOpera "0" SkipOperaBat
-    FileOpen $0 "$INSTDIR\launch-opera.bat" w
-    FileWrite $0 '@echo off$\r$\n'
-    FileWrite $0 'REM Launch Opera with IDMM extension$\r$\n'
-    FileWrite $0 'set EXT_PATH=%~dp0resources\extension$\r$\n'
-    FileWrite $0 '"${OperaPath}" --load-extension="%EXT_PATH%" --no-first-run$\r$\n'
-    FileClose $0
-  SkipOperaBat:
-
-  ; --- Vivaldi launch helper ---
-  StrCmp $FoundVivaldi "0" SkipVivaldiBat
-    FileOpen $0 "$INSTDIR\launch-vivaldi.bat" w
-    FileWrite $0 '@echo off$\r$\n'
-    FileWrite $0 'REM Launch Vivaldi with IDMM extension$\r$\n'
-    FileWrite $0 'set EXT_PATH=%~dp0resources\extension$\r$\n'
-    FileWrite $0 '"${VivaldiPath}" --load-extension="%EXT_PATH%" --no-first-run$\r$\n'
-    FileClose $0
-  SkipVivaldiBat:
 
   ; ============================================================
   ; PROTOCOL HANDLER & FILE ASSOCIATION
@@ -226,42 +173,28 @@ Var /GLOBAL ExtPath
   ; ============================================================
   DetailPrint "=== IDMM Browser Extension Installation ==="
   StrCmp $FoundChrome "0" LogNoChrome
-    DetailPrint "[OK] Chrome extension registered"
+    DetailPrint "[OK] Chrome extension registered via HKCU (ID: $ExtId)"
     Goto LogEdge
   LogNoChrome:
     DetailPrint "[--] Chrome not found, skipped"
 
   LogEdge:
   StrCmp $FoundEdge "0" LogNoEdge
-    DetailPrint "[OK] Edge extension registered"
+    DetailPrint "[OK] Edge extension registered via HKCU (ID: $ExtId)"
     Goto LogBrave
   LogNoEdge:
     DetailPrint "[--] Edge not found, skipped"
 
   LogBrave:
   StrCmp $FoundBrave "0" LogNoBrave
-    DetailPrint "[OK] Brave shortcut created"
-    Goto LogOpera
+    DetailPrint "[OK] Brave extension registered via HKCU + desktop shortcut created"
+    Goto LogFirefox
   LogNoBrave:
     DetailPrint "[--] Brave not found, skipped"
 
-  LogOpera:
-  StrCmp $FoundOpera "0" LogNoOpera
-    DetailPrint "[OK] Opera shortcut created"
-    Goto LogVivaldi
-  LogNoOpera:
-    DetailPrint "[--] Opera not found, skipped"
-
-  LogVivaldi:
-  StrCmp $FoundVivaldi "0" LogNoVivaldi
-    DetailPrint "[OK] Vivaldi shortcut created"
-    Goto LogFirefox
-  LogNoVivaldi:
-    DetailPrint "[--] Vivaldi not found, skipped"
-
   LogFirefox:
   StrCmp $FoundFirefox "0" LogNoFirefox
-    DetailPrint "[OK] Firefox extension registered"
+    DetailPrint "[OK] Firefox extension registered via HKCU + .xpi copied to profiles"
     Goto LogDone
   LogNoFirefox:
     DetailPrint "[--] Firefox not found, skipped"
@@ -270,7 +203,6 @@ Var /GLOBAL ExtPath
     DetailPrint "=== Installation complete ==="
 
 !macroend
-
 
 ; ============================================================
 ; CUSTOM UNINSTALL
@@ -290,21 +222,16 @@ Var /GLOBAL ExtPath
   ; ============================================================
 
   ; --- Chrome ---
-  DeleteRegKey HKCU "Software\Google\Chrome\Extensions\oacdlfdjmjepdjgcjhdihbfemioifhao"
-  DeleteRegKey HKLM "Software\Policies\Google\Chrome\ExtensionInstallForcelist"
+  DeleteRegKey HKCU "Software\Google\Chrome\Extensions\$ExtId"
 
   ; --- Edge ---
-  DeleteRegKey HKCU "Software\Microsoft\Edge\Extensions\oacdlfdjmjepdjgcjhdihbfemioifhao"
-  DeleteRegKey HKLM "Software\Policies\Microsoft\Edge\ExtensionInstallForcelist"
+  DeleteRegKey HKCU "Software\Microsoft\Edge\Extensions\$ExtId"
 
-  ; --- Brave (no registry entry, just shortcuts) ---
-
-  ; --- Opera (no registry entry, just shortcuts) ---
-
-  ; --- Vivaldi (no registry entry, just shortcuts) ---
+  ; --- Brave ---
+  DeleteRegKey HKCU "Software\BraveSoftware\Brave\Extensions\$ExtId"
 
   ; --- Firefox ---
-  DeleteRegValue HKCU "Software\Mozilla\Firefox\Extensions" "idmm-extension"
+  DeleteRegValue HKCU "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds"
 
   ; ============================================================
   ; REMOVE FIREFOX .XPI FROM PROFILES
@@ -323,26 +250,7 @@ Var /GLOBAL ExtPath
   ; ============================================================
   ; REMOVE DESKTOP SHORTCUTS
   ; ============================================================
-  Delete "$DESKTOP\IDMM - Chrome.lnk"
-  Delete "$DESKTOP\IDMM - Edge.lnk"
   Delete "$DESKTOP\IDMM - Brave.lnk"
-  Delete "$DESKTOP\IDMM - Opera.lnk"
-  Delete "$DESKTOP\IDMM - Vivaldi.lnk"
-  Delete "$DESKTOP\IDMM - Firefox.lnk"
-
-  ; ============================================================
-  ; REMOVE LAUNCH HELPER SCRIPTS
-  ; ============================================================
-  Delete "$INSTDIR\launch-chrome.bat"
-  Delete "$INSTDIR\launch-edge.bat"
-  Delete "$INSTDIR\launch-brave.bat"
-  Delete "$INSTDIR\launch-opera.bat"
-  Delete "$INSTDIR\launch-vivaldi.bat"
-
-  ; ============================================================
-  ; REMOVE .XPI FROM INSTALL DIR
-  ; ============================================================
-  Delete "$INSTDIR\IDMM-Extension-1.2.4.xpi"
 
   ; ============================================================
   ; REMOVE USER DATA
