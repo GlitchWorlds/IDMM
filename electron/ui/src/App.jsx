@@ -15,8 +15,6 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showExtensionModal, setShowExtensionModal] = useState(false);
-  const [extensionStatus, setExtensionStatus] = useState(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [showConfirmLeave, setShowConfirmLeave] = useState(false);
   const [pendingFilter, setPendingFilter] = useState(null);
@@ -149,26 +147,6 @@ export default function App() {
     setPendingFilter(null);
   }, []);
 
-  const handleInstallExtension = useCallback((browser) => {
-    setExtensionStatus({ loading: true, browser });
-    fetch('http://127.0.0.1:9977/api/extension/install', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ browser }),
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.ok) {
-          setExtensionStatus({ success: true, message: data.message || `${browser} extension installed successfully.`, browser });
-        } else {
-          setExtensionStatus({ error: true, message: data.error || 'Failed to install extension.', browser });
-        }
-      })
-      .catch(err => {
-        setExtensionStatus({ error: true, message: err.message || 'Network error.', browser });
-      });
-  }, []);
-
   if (showSettings) {
     return (
       <div className="flex h-screen bg-slate-900">
@@ -176,7 +154,6 @@ export default function App() {
           filter={filter}
           onFilterChange={handleFilterChange}
           onSettingsClick={() => setShowSettings(false)}
-          onInstallExtension={() => setShowExtensionModal(true)}
         />
         <div className="flex-1 overflow-y-auto">
           <Settings
@@ -187,13 +164,6 @@ export default function App() {
             saveRef={saveRef}
           />
         </div>
-        {showExtensionModal && (
-          <ExtensionInstallModal
-            onClose={() => { setShowExtensionModal(false); setExtensionStatus(null); }}
-            onInstall={handleInstallExtension}
-            status={extensionStatus}
-          />
-        )}
         {showConfirmLeave && (
           <ConfirmLeaveModal
             onSave={handleSaveAndLeave}
@@ -211,7 +181,6 @@ export default function App() {
         filter={filter}
         onFilterChange={handleFilterChange}
         onSettingsClick={() => setShowSettings(true)}
-        onInstallExtension={() => setShowExtensionModal(true)}
         style={{ WebkitAppRegion: 'no-drag' }}
       />
       <div className="flex-1 flex flex-col overflow-hidden" style={{ WebkitAppRegion: 'no-drag' }}>
@@ -228,68 +197,6 @@ export default function App() {
         </main>
       </div>
       {showAdd && <AddDownload onClose={() => setShowAdd(false)} onAdded={handleRefresh} />}
-      {showExtensionModal && (
-        <ExtensionInstallModal
-          onClose={() => { setShowExtensionModal(false); setExtensionStatus(null); }}
-          onInstall={handleInstallExtension}
-          status={extensionStatus}
-        />
-      )}
-    </div>
-  );
-}
-
-const BROWSER_BUTTONS = [
-  { key: 'chrome', label: 'Chrome', color: 'bg-slate-700 hover:bg-slate-600' },
-  { key: 'edge', label: 'Edge', color: 'bg-slate-700 hover:bg-slate-600' },
-  { key: 'firefox', label: 'Firefox', color: 'bg-slate-700 hover:bg-slate-600' },
-  { key: 'brave', label: 'Brave', color: 'bg-slate-700 hover:bg-slate-600' },
-  { key: 'opera', label: 'Opera', color: 'bg-slate-700 hover:bg-slate-600' },
-  { key: 'vivaldi', label: 'Vivaldi', color: 'bg-slate-700 hover:bg-slate-600' },
-];
-
-function ExtensionInstallModal({ onClose, onInstall, status }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-full max-w-md shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-slate-100">Install Browser Extension</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 transition-colors">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <p className="text-sm text-slate-400 mb-4">Select your browser to install the IDMM extension.</p>
-        <div className="grid grid-cols-2 gap-3">
-          {BROWSER_BUTTONS.map((btn) => (
-            <button
-              key={btn.key}
-              onClick={() => onInstall(btn.key)}
-              disabled={status?.loading}
-              className={`${btn.color} px-4 py-3 rounded-lg text-sm font-medium text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {btn.label}
-            </button>
-          ))}
-        </div>
-        {status?.loading && (
-          <p className="text-sm text-slate-400 mt-4 animate-pulse">Installing for {status.browser}...</p>
-        )}
-        {status?.success && (
-          <div className="mt-4 p-3 rounded-lg bg-green-500/20 border border-green-500/30">
-            <p className="text-sm text-green-400">{status.message}</p>
-          </div>
-        )}
-        {status?.error && (
-          <div className="mt-4 p-3 rounded-lg bg-red-500/20 border border-red-500/30">
-            <p className="text-sm text-red-400">{status.message}</p>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

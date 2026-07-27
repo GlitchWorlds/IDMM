@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { key: 'queue', label: 'Queue', icon: 'M12 8v4l3 3' },
 ];
 
-function Sidebar({ filter, onFilterChange, onSettingsClick, onInstallExtension, style }) {
+function Sidebar({ filter, onFilterChange, onSettingsClick, style }) {
   return (
     <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-full shrink-0" style={{ ...style, WebkitAppRegion: 'drag' }}>
       {/* Logo */}
@@ -42,7 +42,7 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, onInstallExtension, 
       </nav>
 
       {/* Settings */}
-      <div className="p-3 border-t border-slate-800 space-y-1" style={{ WebkitAppRegion: 'no-drag' }}>
+      <div className="p-3 border-t border-slate-800" style={{ WebkitAppRegion: 'no-drag' }}>
         <button
           onClick={onSettingsClick}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
@@ -53,15 +53,6 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, onInstallExtension, 
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
           <span>Settings</span>
-        </button>
-        <button
-          onClick={onInstallExtension}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.526 2.526 0 1 1-3.571-3.571l5.653-4.655M14.564 9.286c.22-.597.26-1.215.118-1.804a2.526 2.526 0 1 1 3.571-3.571l5.653 4.655M14.564 9.286l-4.655 5.653m4.655-5.653 5.653-4.655M14.564 9.286 9.286 14.564" />
-          </svg>
-          <span>Install Extension</span>
         </button>
       </div>
     </aside>
