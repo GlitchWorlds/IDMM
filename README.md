@@ -1,4 +1,4 @@
-# 🚀 IDMM — Internet Download Manager Max
+# IDMM — Internet Download Manager Max
 
 **Free, open-source download manager with multi-threaded acceleration, browser extension, and resume capability. 100% free, no ads, no tracking.**
 
@@ -6,7 +6,7 @@
 
 ---
 
-## 📦 Download & Install
+## Download & Install
 
 ### Option 1: Installer (Recommended)
 Download `IDMM-Setup-1.3.0.exe` from [Releases](https://github.com/GlitchWorlds/IDMM/releases).
@@ -27,7 +27,7 @@ Or use the **"Install Extension"** button inside IDMM Settings to auto-install.
 
 ---
 
-## ✨ Features Detail
+## Features Detail
 
 ### Download Engine
 - **Multi-threaded Download** — 1 to 128 threads per download. Auto mode (file-size based) or manual.
@@ -44,7 +44,7 @@ Or use the **"Install Extension"** button inside IDMM Settings to auto-install.
 - **Persistent Worker Pool** — Workers are reused instead of spawned fresh per chunk.
 
 ### Browser Extension
-- **Floating Download Button** — `[↓IDMM]` button appears next to every downloadable link on any website. One click sends the file to IDMM.
+- **Floating Download Button** — `[IDMM]` button appears next to every downloadable link on any website. One click sends the file to IDMM.
 - **Download Interception** — Automatically captures browser downloads for supported file types (media, archives, documents, executables).
 - **Right-click Menu** — "Download with IDMM" on any link, image, video, or audio.
 - **Badge Indicator** — Shows active download count on the extension icon.
@@ -77,7 +77,7 @@ Or use the **"Install Extension"** button inside IDMM Settings to auto-install.
 
 ---
 
-## 🛠️ Quick Start
+## Quick Start
 
 ```bash
 # Clone & build
@@ -94,8 +94,8 @@ cd ../electron && npm run build
 
 ---
 
-## 📜 License
+## License
 
 MIT — Free to use, modify, and distribute.
 
-**⭐ Star this repo if you find it useful!**
+**Star this repo if you find it useful!**
