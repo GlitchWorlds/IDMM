@@ -71,8 +71,6 @@ function printBanner() {
 async function main() {
   printBanner();
 
-  const autoResume = process.argv.includes('--auto-resume');
-
   // 1. Initialize database (async  sql.js WASM needs to load first)
   console.log('[IDMM] Initializing database...');
   const db = await IDMMDatabase.create(DB_PATH);
@@ -86,6 +84,9 @@ async function main() {
   }
   const settings = settingsResult.data;
   console.log(`[IDMM] Settings loaded (${Object.keys(settings).length} keys)`);
+
+  const autoResumeSetting = db.getSetting('auto_resume');
+  const autoResume = process.argv.includes('--auto-resume') || (autoResumeSetting.ok && autoResumeSetting.data === 'true');
 
   // 3. Initialize download manager
   console.log('[IDMM] Initializing download engine...');
