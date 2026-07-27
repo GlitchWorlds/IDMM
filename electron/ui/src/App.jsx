@@ -36,15 +36,10 @@ export default function App() {
       if (msg.downloads && Array.isArray(msg.downloads)) {
         setDownloads((prev) => {
           const updates = new Map(msg.downloads.map((d) => [d.id, d]));
-          const updated = prev.map((d) =>
+          // Only update existing downloads — don't add new ones (handled by 'added' message)
+          return prev.map((d) =>
             updates.has(d.id) ? { ...d, ...updates.get(d.id) } : d
           );
-          // Add any new downloads not yet in state
-          const existingIds = new Set(prev.map((d) => d.id));
-          for (const d of msg.downloads) {
-            if (!existingIds.has(d.id)) updated.push(d);
-          }
-          return updated;
         });
         // Update speed history from the batch
         setSpeedHistory((prev) => {
@@ -55,13 +50,21 @@ export default function App() {
         });
       }
     } else if (msg.type === 'status') {
-      setDownloads((prev) =>
-        prev.map((d) =>
+      setDownloads((prev) => {
+        // Remove cancelled downloads from list (they're terminated)
+        if (msg.status === 'cancelled') {
+          return prev.filter((d) => d.id !== msg.id);
+        }
+        return prev.map((d) =>
           d.id === msg.id ? { ...d, status: msg.status } : d
-        )
-      );
+        );
+      });
     } else if (msg.type === 'added') {
-      setDownloads((prev) => [msg.data, ...prev]);
+      setDownloads((prev) => {
+        // Prevent duplicate — check if already in list
+        if (prev.some(d => d.id === msg.data?.id)) return prev;
+        return [msg.data, ...prev];
+      });
     } else if (msg.type === 'removed') {
       setDownloads((prev) => prev.filter((d) => d.id !== msg.id));
     }
