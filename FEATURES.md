@@ -4,328 +4,74 @@
 
 ---
 
-## Extension (Browser)
+## 🌐 Browser Extension
 
 ### Floating Download Button
-- Saat browsing website, content script scan semua `<a href>` link di halaman
-- Deteksi file berdasarkan ekstensi: `.mp4`, `.mkv`, `.avi`, `.zip`, `.rar`, `.pdf`, `.exe`, `.msi`, `.mp3`, `.flac`, `.iso`, dan 40+ ekstensi lainnya
-- Inject button biru `[IDMM]` di samping setiap link download
-- Klik button → kirim URL ke background service worker → kirim ke IDMM server via REST API
-- Button jadi hijau `[✓]` kalau sukses, merah `[✗]` kalau gagal
-- MutationObserver untuk halaman dinamis (lazy load, infinite scroll)
+- Saat browsing website, extension mendeteksi semua link yang mengarah ke file unduhan (seperti `.mp4`, `.zip`, `.pdf`, `.exe`, `.mp3`, `.iso`, dan 40+ ekstensi lainnya).
+- Extension akan menampilkan tombol biru **`[IDMM]`** di sebelah link tersebut.
+- Cukup satu klik pada tombol, file akan langsung dikirim dan didownload oleh IDMM.
 
-### Download Interception
-- `chrome.downloads.onDeterminingFilename` listener — intercept download dari browser
-- Filter berdasarkan file type, size, dan settings (`enabled` toggle)
-- Cancel browser download → kirim URL ke IDMM server
-- Support cookies dan referrer passing
+### Auto-Intercept Browser Downloads
+- Jika fitur ini diaktifkan, IDMM akan secara otomatis "membajak" dan mengambil alih proses download dari browser.
+- Anda tidak perlu copy-paste link manual; saat Anda klik tombol download bawaan website, IDMM yang akan mengerjakannya.
 
-### Right-Click Menu
-- "Download with IDMM" pada link context (`contexts: ['link']`)
-- "Download with IDMM" pada media (`contexts: ['image', 'video', 'audio']`)
-- "Download selected URL with IDMM" pada selection (`contexts: ['selection']`)
-- Kirim URL + cookies + referrer ke IDMM server
+### Right-Click Context Menu
+- Klik kanan pada link, gambar, video, atau audio apa saja di halaman web → pilih **"Download with IDMM"**.
+- Anda juga bisa memblok teks yang berisi URL, klik kanan → **"Download selected URL with IDMM"**.
 
-### Badge Indicator
-- Ikon toolbar menampilkan jumlah active download (badge count)
-- Health check server setiap 10s — badge `OFF`(merah) kalau server mati
-- Polling download list setiap 5s untuk update badge
-- WebSocket untuk real-time sync
-
-### WebSocket Connection
-- Koneksi ke `ws://127.0.0.1:9977/ws`
-- Exponential backoff reconnect (1s → 2s → 4s → ... → 30s max)
-- Menerima `SETTINGS_CHANGED` broadcast → update local settings cache
-- Menerima `DOWNLOAD_UPDATE` → relay ke popup (jika ada)
-- Kirim sinyal ke content script untuk metadata page
-
-### Server Communication (REST API)
-- Endpoints: health check, list downloads, start download, pause/resume/cancel, delete
-- Settings sync antara extension dan desktop app
-- Extension ID stabil (`oacdlfdjmjepdjgcjhdihbfemioifhao`) dari RSA key di manifest
-- Auto-install via installer (registry HKCU method)
+### Active Badge Indicator
+- Icon IDMM di pojok browser akan menampilkan angka jumlah file yang sedang aktif didownload.
+- Jika desktop app IDMM belum dibuka, icon akan berwarna merah dengan tulisan **`OFF`**.
 
 ---
 
-## Desktop App (Electron + React)
+## 🖥️ Desktop Application
 
-### Download Engine
+### Super Fast Multi-Threaded Engine
+- Kecepatan download diakselerasi dengan memecah file menjadi beberapa bagian (chunk) dan mendownloadnya secara bersamaan (hingga 128 koneksi paralel).
+- **Auto Mode:** IDMM akan mengatur jumlah koneksi otomatis berdasarkan ukuran file (1 koneksi untuk file kecil, hingga 32 koneksi untuk file besar >500MB).
+- **Manual Mode:** Anda bisa menentukan sendiri batas maksimum jumlah koneksi di menu Settings.
 
-#### Multi-Threaded Download
-- 1–128 threads per download
-- Auto mode: thread count berdasarkan file size:
-  - `< 5 MB` → 1 thread
-  - `5–50 MB` → 4 threads
-  - `50–500 MB` → 16 threads
-  - `> 500 MB` → 32 threads (max 64)
-- Manual mode: user menentukan jumlah thread (range slider 1–128)
+### Smart Download Queue & Priority
+- Anda bisa mengatur prioritas setiap file yang didownload: **HIGH**, **NORMAL**, atau **LOW**.
+- IDMM akan otomatis mendownload file berdasarkan urutan antrean dan prioritas tanpa membebani bandwidth komputer secara bersamaan.
 
-#### Queue Management
-- Priority: HIGH / NORMAL / LOW
-- New download default ke NORMAL
-- Queue processing otomatis — download berikutnya dari queue jalan saat slot kosong
-- Priority bisa di-set per download
+### Pause, Resume, & Cancel
+- Download bisa di-pause kapan saja dan dilanjutkan kembali tanpa harus mengulang dari awal.
+- **Auto-Resume Recovery:** Jika komputer mati mendadak atau aplikasi ter-close, progress download tidak akan hilang dan bisa dilanjutkan saat IDMM dibuka kembali.
 
-#### Pause / Resume / Cancel
-- Pause: flush state ke DB + resume file → terminate workers
-- Resume: load state dari DB + resume file → rebuild chunks → spawn workers
-- Cancel: terminate workers + cleanup temp files → update DB
-- Resume survive app restart — dual persistence (SQLite + JSON resume files)
+### Download Scheduling
+- Jadwalkan kapan file harus mulai didownload.
+- Mendukung penjadwalan satu kali jalan (One-time), atau berulang (Harian / Mingguan) — cocok untuk download file besar di malam hari saat bandwidth sedang longgar.
 
-#### Download Scheduling
-- One-time: schedule download pada waktu tertentu (setTimeout)
-- Recurring: daily/weekly (setInterval)
-- Cron expression parsing (5-field format)
-- Persistence: jobs disimpan di JSON file, reload otomatis saat restart
+### Batch Download
+- Masukkan banyak URL sekaligus untuk didownload secara masal tanpa harus klik satu-per-satu.
 
-#### Batch Download
-- `POST /api/downloads/batch` — submit multiple URLs sekaligus
-- Concurrent limit 3 — tidak overload server
-- Per-URL error handling — satu gagal tidak menghentikan yang lain
-- Return array hasil: `{ url, success, downloadId?, error? }`
+### Clipboard Monitoring
+- Fitur auto-detect link: setiap kali Anda mencopy (Ctrl+C) sebuah URL file ke clipboard, IDMM akan mendeteksinya dan langsung menawarkan untuk mendownload file tersebut. (Fitur ini bisa dimatikan di Settings).
 
-### Performance Features
+### File Categories & Organization
+- File yang didownload otomatis dikelompokkan ke dalam kategori berdasarkan jenisnya (Videos, Music, Documents, Archives, Software, Others).
+- Anda juga dapat membuat, mengubah, dan mewarnai custom kategori Anda sendiri.
 
-#### HTTP Keep-Alive
-- `http.Agent` / `https.Agent` dengan `keepAlive: true`
-- Connection reuse across chunks — eliminate TCP/TLS handshake overhead
-- `maxSockets: 1` per worker
+### Speed Limiter & Control
+- Jika Anda ingin main game atau browsing sambil mendownload, Anda dapat membatasi kecepatan maksimal download (Global Speed Limit) agar koneksi internet tidak lag.
 
-#### Speed Limiting
-- Global speed cap (`speed_limit_global` setting) dalam KB/s
-- Per-worker token bucket untuk speed limiting
-- Throttle detection — otomatis kurangi thread saat limit tercapai
-- Respawn workers setelah 5s (jika throttle selesai)
+### Real-Time Dashboard
+- **Speed Graph:** Visualisasi kecepatan download (MB/s) secara real-time dalam bentuk grafik.
+- **Download List:** Monitor estimasi waktu selesai (ETA), kecepatan, ukuran file, dan progress bar.
+- **Search & Filter:** Cari file yang sudah didownload dengan cepat, atau saring berdasarkan status (Active, Completed, Paused, Queue).
 
-#### Persistent Worker Pool
-- Workers direuse antar chunks — tidak spawn baru setiap chunk
-- `acquireWorker(workerPath, workerData)` — ambil dari idle pool atau spawn baru
-- `releaseWorker(worker)` — return ke idle pool, bukan terminate
-- `terminateAllIdle()` — cleanup idle workers saat shutdown
-
-#### DB Write Optimization
-- Throttle DB update ke 2s (dari 500ms)
-- Dirty check: hanya update jika progress berubah >1%
-- Transaction wrapper untuk multi-row operations (BEGIN/COMMIT/ROLLBACK)
-- JOIN query untuk getResumableDownloads (N+1 → single query)
-
-### API Server (REST + WebSocket)
-
-#### REST Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/health` | Server health + version + uptime + connected clients |
-| POST | `/api/download` | Start new download |
-| POST | `/api/downloads/batch` | Batch download (multiple URLs) |
-| GET | `/api/downloads` | List all downloads |
-| GET | `/api/downloads/history` | Paginated download history (search + filter + pagination) |
-| GET | `/api/download/:id` | Download detail + status |
-| POST | `/api/download/:id/pause` | Pause download |
-| POST | `/api/download/:id/resume` | Resume download |
-| POST | `/api/download/:id/cancel` | Cancel download |
-| DELETE | `/api/download/:id` | Delete download (optional delete file) |
-| GET | `/api/settings` | Get all settings |
-| PUT | `/api/settings` | Update settings |
-| GET | `/api/stats` | Download statistics |
-| POST | `/api/schedule` | Create scheduled download |
-| GET | `/api/scheduled` | List scheduled jobs |
-| DELETE | `/api/schedule/:jobId` | Cancel scheduled job |
-| GET | `/api/categories` | List categories |
-| POST | `/api/categories` | Create category |
-| PUT | `/api/categories/:id` | Update category |
-| DELETE | `/api/categories/:id` | Delete category |
-| POST | `/api/open-folder` | Open folder in file explorer |
-
-#### WebSocket
-- Path: `ws://127.0.0.1:9977/ws`
-- Broadcast interval: 500ms
-- Message types: `progress` (batched), `status`, `added`, `removed`, `SETTINGS_CHANGED`
-- Heartbeat setiap 15s, drop unresponsive clients setelah 10s
-- Extension clients tracking dengan metadata
-
-### Security
-
-#### SSRF Protection
-- Blocked hosts: `127.0.0.1`, `localhost`, `0.0.0.0`, `::1`, private network ranges
-- DNS validation — cek resolved IP bukan private/loopback
-- Redirect validation — validasi URL setelah redirect
-
-#### Path Traversal Prevention
-- Validasi `save_to` terhadap allowed roots (default Downloads folder)
-- Whitelist-based — hanya path dalam allowed roots
-
-#### Rate Limiting
-- 100 request/min per IP
-- TTL-based eviction untuk stale entries
-
-#### SHA-256 Verification
-- Optional checksum verification setelah merge
-- File integrity check — size mismatch → cleanup + throw
-- Checksum mismatch → cleanup + throw
-
-### Data Management
-
-#### Download History
-- Paginated dengan search (filename/url) dan status filter
-- Default 20 items per page
-
-#### Custom Categories
-- Six default: Videos, Music, Documents, Archives, Software, Others
-- CRUD: create, rename, color/icon, delete
-- Persistence: JSON file (`data/categories.json`)
-
-#### Resume State
-- Dual persistence: SQLite + JSON resume files
-- Per-chunk tracking: `chunk_index`, `start_byte`, `end_byte`, `downloaded`
-- Validate chunks on resume — cross-check DB + resume file + actual file sizes
-- Cleanup: temp files deleted on cancel/complete
-
-### Desktop UI
-
-#### Frameless Window
-- Modern dark/light theme — toggle via settings
-- Custom title bar dengan drag support
-- Min size: 600×400
-
-#### Real-Time Progress
-- Live speed (KB/s atau MB/s), ETA, progress percentage
-- WebSocket-based — update setiap 500ms
-- Speed history graph (60 data points, ~30s window)
-
-#### Download List
-- Columns: filename, size, status, speed, progress, actions
-- Filter by status: All, Active, Completed, Paused, Queue
-- Search by filename or URL
-- Refresh button untuk reload dari server
-
-#### Settings Page
-- Theme: Dark / Light
-- Thread Mode: Auto / Manual
-- Thread count slider (1–128, manual mode)
-- Default save path (folder picker)
-- Save / Cancel / Discard changes
-- Dirty tracking — confirm sebelum navigate away
-
-#### Clipboard Monitoring
-- Poll clipboard setiap 2s untuk URL
-- Filter: http/https only, cooldown 10s per URL
-- Emit event → start download otomatis
-- Toggle di settings
-
-#### Install Extension
-- Button di Settings (sebelumnya di Sidebar)
-- Buka instruksi manual jika installer tidak admin
-- Extension path ditampilkan untuk loading unpacked
-
-### Merge Engine
-
-#### Chunk Merging
-- Atomic write — tulis ke `.part` file dulu, rename setelah selesai
-- Backpressure handling — pause reader saat writer penuh
-- Error handling — destroy stream + cleanup pada error
-
-#### File Verification
-- Size verification setelah merge (`stat.size !== totalSize`)
-- Optional SHA-256 checksum verification
-- Auto cleanup pada verification failure — tidak tinggalkan file setengah jadi
-
-### Database Layer
-
-#### Tabel
-- `downloads` — download records (id, url, filename, status, size, timestamps, etc.)
-- `chunks` — per-chunk tracking (index, byte range, status, error, retries)
-- `settings` — key-value settings store
-
-#### Query Methods
-- `listDownloads(status?)` — list dengan optional filter status
-- `getDownload(id)` — single download record
-- `getDownloadWithChunks(id)` — download + chunks joined
-- `getResumableDownloads()` — JOIN query untuk paused/error downloads
-- `getDownloadsWithPagination(page, limit, search, status)` — paginated + search
-- `getAllSettings()` / `getSetting(key)` / `updateSettings(settings)`
-
-### Utils
-
-#### Filename
-- `resolveFilename(url, disposition, mimeType)` — extract filename dari URL/headers
-- `ensureUniqueFilename(filePath)` — add suffix jika file already exists
-- `resolveCategory(mimeType)` — map MIME ke category
-
-#### MIME Detection
-- `detectMime(filePath, buffer)` — MIME type detection dari extension + content sniff
-- `resolveCategory(mimeType)` — category mapping
-- `getCategoryFromMime(mimeType)` — rule-based categorization
-- `parseContentType(header)` — parse Content-Type header
-
-#### Hash
-- `hashFile(filePath)` — SHA-256 file hashing
-- `hashString(str)` — SHA-256 string hashing
-- `hashBuffer(buf)` — SHA-256 buffer hashing
-- `createHasher()` — streaming hasher untuk large files
-
-#### SSRF Guard
-- `validateRedirect(url)` — check redirect target bukan private/loopback
-- `validateDnsResolution(hostname)` — resolve DNS + validate IP
-- `isBlockedHost(hostname)` — static blocked host list check
+### Custom Save Path & File Integrity
+- Pilih folder tujuan download secara global atau ubah per-file sebelum download dimulai.
+- IDMM otomatis melakukan pengecekan file saat selesai (Size & Checksum Verification) untuk memastikan file yang diunduh utuh dan tidak korup.
 
 ---
 
-## Installer (NSIS)
-
-### Extension Auto-Install
-- Saat install (admin), scan Chrome, Edge, Brave, Firefox
-- Chrome/Edge/Brave: `HKCU\Software\<Browser>\Extensions\<id>\` — `path` + `version`
-- Firefox: registry pointer ke `.xpi` + copy ke profiles
-- Extension ID stabil dari RSA key di manifest
-- Uninstall: cleanup registry, hapus `.xpi` dari profiles
-
-### Startup
-- Auto-start registry (`HKCU\...\Run`)
-- Protocol handler (`idmm://` URLs)
-- File association (`.idmm` config files)
+## ⚙️ Settings & System
+- **Theme Switcher:** Tampilan antarmuka mendukung Dark Mode (Default) dan Light Mode.
+- **Auto-Start:** IDMM bisa dikonfigurasi untuk otomatis menyala di background saat Windows baru dinyalakan.
+- **Auto-Install Extension:** Installer IDMM secara pintar akan mendeteksi browser yang ada di komputer Anda (Chrome, Edge, Brave, Firefox) dan otomatis memasangkan ekstensinya.
 
 ---
-
-## File Structure
-
-```
-IDMM/
-├── app/                   # Backend (Node.js)
-│   └── src/
-│       ├── db/sqlite.js
-│       ├── engine/
-│       │   ├── downloader.js
-│       │   ├── chunk-worker.js
-│       │   ├── merge.js
-│       │   ├── resume.js
-│       │   ├── speed-tracker.js
-│       │   ├── worker-pool.js
-│       │   └── download-queue.js
-│       ├── server/server.js
-│       ├── scheduler.js
-│       ├── routes/
-│       │   ├── batch.js
-│       │   ├── scheduler.js
-│       │   ├── history.js
-│       │   └── categories.js
-│       └── utils/
-├── electron/              # Desktop
-│   ├── main.js
-│   ├── preload.js
-│   ├── clipboard-monitor.js
-│   ├── installer.nsh
-│   └── ui/
-├── extension/             # Browser
-│   ├── manifest.json
-│   ├── background.js
-│   ├── content.js
-│   └── lib/api-client.js
-└── data/                  # Runtime data
-    ├── categories.json
-    └── scheduled-jobs.json
-```
-
----
-
-*IDMM v1.3.0 — Generated from source analysis*
+*IDMM v1.3.0*
