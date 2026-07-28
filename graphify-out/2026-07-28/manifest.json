@@ -5,8 +5,8 @@
     "semantic_hash": ""
   },
   "app/main.js": {
-    "mtime": 1785166761.2339365,
-    "ast_hash": "f74921f65f9337d11e93f6c2aada8e40",
+    "mtime": 1784991099.2486634,
+    "ast_hash": "dc8e18ba8010a04809a77181981d7deb",
     "semantic_hash": ""
   },
   "app/package.json": {
@@ -55,8 +55,8 @@
     "semantic_hash": ""
   },
   "app/src/server/server.js": {
-    "mtime": 1785120882.8546865,
-    "ast_hash": "cc29cfc9cfb1bcfbfdab79fc7f654f89",
+    "mtime": 1785027105.764434,
+    "ast_hash": "52476b88265e82d03346ca638949cd54",
     "semantic_hash": ""
   },
   "app/src/utils/filename.js": {
@@ -115,8 +115,8 @@
     "semantic_hash": ""
   },
   "electron/ui/src/App.jsx": {
-    "mtime": 1785122717.9028263,
-    "ast_hash": "4661ce1460c347e6235b0898491c958b",
+    "mtime": 1784882954.3554718,
+    "ast_hash": "41316dc3fb1683c38d0a4e85a4f01bc3",
     "semantic_hash": ""
   },
   "electron/ui/src/api.js": {
@@ -145,8 +145,8 @@
     "semantic_hash": ""
   },
   "electron/ui/src/components/Sidebar.jsx": {
-    "mtime": 1785120489.6268353,
-    "ast_hash": "9e425e25505241449934a104ff43f71c",
+    "mtime": 1784862067.429946,
+    "ast_hash": "083026cd5aad2b6ac18c9c2c93088698",
     "semantic_hash": ""
   },
   "electron/ui/src/components/SpeedGraph.jsx": {
@@ -170,13 +170,13 @@
     "semantic_hash": ""
   },
   "extension/background.js": {
-    "mtime": 1785126577.4979062,
-    "ast_hash": "a7b20c581f3cff964054dd2a60b2a9a7",
+    "mtime": 1784837495.8904536,
+    "ast_hash": "93874f5925c1827858ee51a1d5cc1ea6",
     "semantic_hash": ""
   },
   "extension/content.js": {
-    "mtime": 1785166639.9758139,
-    "ast_hash": "ce8ee79146e43059f3526bab08663b38",
+    "mtime": 1784837517.7299514,
+    "ast_hash": "3347b94b1617a551314787485a3ce7fc",
     "semantic_hash": ""
   },
   "extension/lib/api-client.js": {
@@ -185,8 +185,8 @@
     "semantic_hash": ""
   },
   "extension/manifest.json": {
-    "mtime": 1785038201.184508,
-    "ast_hash": "6a61e04df2ce0266b6c8ea2c46ce9e03",
+    "mtime": 1784965470.2318456,
+    "ast_hash": "e4b35120bcc875e855e537f86bf97d30",
     "semantic_hash": ""
   },
   "patch.js": {
@@ -199,9 +199,109 @@
     "ast_hash": "f37ecb7094d2bd36a059565697ba10cd",
     "semantic_hash": ""
   },
+  "CHANGELOG.md": {
+    "mtime": 1784485675.6927967,
+    "ast_hash": "fdbe225d86d24ca3feaa5cd7de4343bd",
+    "semantic_hash": ""
+  },
+  "DESIGN.md": {
+    "mtime": 1784511644.949449,
+    "ast_hash": "43938ffece849a3c242ce8d72b498c31",
+    "semantic_hash": ""
+  },
   "README.md": {
-    "mtime": 1785118463.1106453,
-    "ast_hash": "0a3417176ac65f65210cda1f7375d427",
+    "mtime": 1784840701.3138702,
+    "ast_hash": "4174052363312c9e0f4b8cd263a5c777",
+    "semantic_hash": ""
+  },
+  "RELEASE_NOTES.md": {
+    "mtime": 1784485856.258065,
+    "ast_hash": "c5787698d2ab6febb16fea41473c6eb3",
+    "semantic_hash": ""
+  },
+  "app/AUDIT.md": {
+    "mtime": 1784511741.9419098,
+    "ast_hash": "885bc8de1c97155fe0463b4588e06a62",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/AUDIT-REPORT.md": {
+    "mtime": 1784511741.8657918,
+    "ast_hash": "2a3d5d527217eefc957eb933adda3d42",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/AUDIT-TASK.md": {
+    "mtime": 1784511741.8688002,
+    "ast_hash": "ded5dd78bb01dfc35c6cac57d1e12b73",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/AUDIT-V2-REPORT.md": {
+    "mtime": 1784511741.8715293,
+    "ast_hash": "14f98e4f92a779bd2973440e5067039e",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/AUDIT-V3-REPORT.md": {
+    "mtime": 1784511741.874568,
+    "ast_hash": "d5b2144a0082dfea1ae748fe15cef736",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/AUDIT-V4-REPORT.md": {
+    "mtime": 1784511741.8785622,
+    "ast_hash": "c5577e9985fe8247cc499a68c60c1720",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/CONSOLIDATED-FIX-TASK.md": {
+    "mtime": 1784511741.88054,
+    "ast_hash": "7a919bcf49232c27ba17f02b8668789d",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/FIX-TASK-EXTENSION-V5.md": {
+    "mtime": 1784511741.8825734,
+    "ast_hash": "3019ff227070c27378e45cc6139a9904",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/FIX-TASK-V2.md": {
+    "mtime": 1784511741.8855677,
+    "ast_hash": "89271a5502621c3fa98183ff4a11b1f6",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/FIX-TASK-V4.md": {
+    "mtime": 1784511741.8875825,
+    "ast_hash": "9de2cba03f466e2aeb528fb0789340ff",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/FIX-TASK-V5.md": {
+    "mtime": 1784511741.8905625,
+    "ast_hash": "747057e598fa382285f503feeec9b6c2",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/FIX-TASK.md": {
+    "mtime": 1784511741.8989115,
+    "ast_hash": "607170815b0ef25f8e0a78b14c71b74f",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/WORKFLOW-ANALYSIS-V2.md": {
+    "mtime": 1784511741.9339163,
+    "ast_hash": "b5ef0192b91f3ee1298c92e34c139769",
+    "semantic_hash": ""
+  },
+  "app/QC-FIXES/WORKFLOW-ANALYSIS.md": {
+    "mtime": 1784511741.9379106,
+    "ast_hash": "811dcc766561325be5c577b01306e775",
+    "semantic_hash": ""
+  },
+  "electron/FIX-TASK.md": {
+    "mtime": 1784511644.9394448,
+    "ast_hash": "08b6cd6313b17640c0379565a32d5286",
+    "semantic_hash": ""
+  },
+  "electron/INSTALLER-TASK.md": {
+    "mtime": 1784511644.9414473,
+    "ast_hash": "0392f4ed4aa311f58e95283ea372e2f4",
+    "semantic_hash": ""
+  },
+  "electron/ui/TASK.md": {
+    "mtime": 1784511644.936449,
+    "ast_hash": "41690143f640481499124cd2b8e5522a",
     "semantic_hash": ""
   },
   "electron/ui/index.html": {
@@ -212,6 +312,11 @@
   "extension/FIX-TASK.txt": {
     "mtime": 1784442813.5711658,
     "ast_hash": "5c2daf957a2773473b24a0e36656e45b",
+    "semantic_hash": ""
+  },
+  "prod.md": {
+    "mtime": 1784840378.7154648,
+    "ast_hash": "bd5f14fdeccee75058307164d3778636",
     "semantic_hash": ""
   },
   "electron/assets/icon.png": {
@@ -279,9 +384,9 @@
     "ast_hash": "9f5a135f07bca0e3b138e80b194c4914",
     "semantic_hash": ""
   },
-  "FEATURES.md": {
-    "mtime": 1785165569.949733,
-    "ast_hash": "edabf42f61151f90de048520cdfebe60",
+  "CODE_REVIEW_REPORT.md": {
+    "mtime": 1784881683.0311973,
+    "ast_hash": "4dcd73e87fa502d3f9695a0c627f1bfa",
     "semantic_hash": ""
   }
 }
