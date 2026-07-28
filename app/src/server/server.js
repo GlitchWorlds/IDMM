@@ -168,6 +168,22 @@ class IDMMServer {
       });
     });
 
+    // GET /api/ws-status  WebSocket debugging endpoint
+    this.app.get('/api/ws-status', (req, res) => {
+      const clients = [...this.extensionClients.entries()].map(([ws, info]) => ({
+        connectedAt: info.connectedAt,
+        lastActivity: info.lastActivity,
+        alive: ws.isAlive !== false,
+        readyState: ws.readyState,
+      }));
+      res.json({
+        ws_running: this.wss !== null,
+        ws_clients_count: this.extensionClients.size,
+        ws_set_count: this.wsClients.size,
+        clients,
+      });
+    });
+
     // POST /api/download  Start a new download
     this.app.post('/api/download', async (req, res) => {
       const url = req.body && req.body.url; // F10: Extract URL early for catch block

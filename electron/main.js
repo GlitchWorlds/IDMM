@@ -64,7 +64,19 @@ async function startServer() {
   });
   const scheduler = new DownloadScheduler({ downloader });
   server = new IDMMServer({ db, downloader, scheduler });
-  await server.start();
+
+  try {
+    await server.start();
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      // Dev mode: app/main.js already started on port 9977
+      // Don't create a duplicate server. Electron UI connects to existing WS.
+      console.log('[IDMM] Server already running on port 9977 — connecting as client-only');
+      server = null;
+      return; // Skip onComplete wiring — existing server handles it
+    }
+    throw err; // Fatal — rethrow for app.quit()
+  }
 
   // WP-5: Wire onComplete callback — same pattern as app/main.js
   // Save server's handler (set in server.start()), then chain our logging + broadcast
