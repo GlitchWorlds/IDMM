@@ -24,10 +24,16 @@ export default function App() {
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('idmm_theme') || 'dark';
   });
+  const themeOnEnterRef = useRef(theme);
 
   useEffect(() => {
     localStorage.setItem('idmm_theme', theme);
     document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const handleOpenSettings = useCallback(() => {
+    themeOnEnterRef.current = theme;
+    setShowSettings(true);
   }, [theme]);
 
   const handleWsMessage = useCallback((msg) => {
@@ -136,6 +142,8 @@ export default function App() {
   }, [pendingFilter]);
 
   const handleDiscardAndLeave = useCallback(() => {
+    // Revert theme to what it was when settings were opened
+    setTheme(themeOnEnterRef.current);
     setSettingsDirty(false);
     setShowConfirmLeave(false);
     if (pendingFilter) {
@@ -183,7 +191,7 @@ export default function App() {
       <Sidebar
         filter={filter}
         onFilterChange={handleFilterChange}
-        onSettingsClick={() => setShowSettings(true)}
+        onSettingsClick={() => { themeOnEnterRef.current = theme; setShowSettings(true); }}
         style={{ WebkitAppRegion: 'no-drag' }}
       />
       <div className="flex-1 flex flex-col overflow-hidden" style={{ WebkitAppRegion: 'no-drag' }}>
