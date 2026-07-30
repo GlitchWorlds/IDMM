@@ -122,22 +122,37 @@ Var /GLOBAL ExtId
   ; ============================================================
 
   ; --- Chrome (64-bit view) ---
+  ; NOTE: Chrome 90+ deprecated HKLM\path+version registration.
+  ; Registry keys written for legacy/older Chrome. For Chrome 150+, we also
+  ; inject --load-extension into the Start Menu shortcut via bundled PS1 script.
   StrCmp $FoundChrome "0" SkipChrome
     SetRegView 64
     WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
     WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "${VERSION}"
-    ; Also write to 32-bit view for 32-bit Chrome on 64-bit Windows
     SetRegView 32
     WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
     WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "${VERSION}"
     SetRegView 64
+
+    ; Inject --load-extension into Chrome Start Menu shortcut
   SkipChrome:
 
   ; --- Edge ---
+  ; Edge (Chromium 150+) also deprecated HKLM\path+version.
   StrCmp $FoundEdge "0" SkipEdge
     WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "path" "$ExtPath"
     WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "version" "${VERSION}"
   SkipEdge:
+
+  ; --- Shortcut injection for Chrome 150+ (both Chrome and Edge) ---
+  ; Chrome 150 deprecated HKLM\path+version. Inject --load-extension via shortcut.
+  IfFileExists "$INSTDIR\resources\scripts\inject-extension.ps1" InjectShorts SkipShorts
+  InjectShorts:
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\scripts\inject-extension.ps1" "$ExtPath" install'
+    Pop $0
+    Pop $1
+    DetailPrint "Shortcut injection: $1"
+  SkipShorts:
 
   ; --- Brave ---
   StrCmp $FoundBrave "0" SkipBrave
@@ -249,6 +264,16 @@ Var /GLOBAL ExtId
 
   ; Remove desktop shortcuts
   Delete "$DESKTOP\IDMM - Brave.lnk"
+
+  ; Remove --load-extension from Chrome/Edge Start Menu shortcuts
+  SetRegView Default
+  IfFileExists "$INSTDIR\resources\scripts\inject-extension.ps1" UnInjectShorts SkipUnInject
+  UnInjectShorts:
+    nsExec::ExecToStack 'powershell -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\scripts\inject-extension.ps1" "$ExtPath" uninstall'
+    Pop $0
+    Pop $1
+    DetailPrint "Shortcut cleanup: $1"
+  SkipUnInject:
 
   ; Remove user data (only if flag is set)
   ; RMDir /r "$PROFILE\.idmm"

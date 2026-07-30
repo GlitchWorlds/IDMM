@@ -36,6 +36,10 @@
       {
         "from": "../extension",
         "to": "extension"
+      },
+      {
+        "from": "resources/scripts/inject-extension.ps1",
+        "to": "scripts/inject-extension.ps1"
       }
     ],
     "win": {
