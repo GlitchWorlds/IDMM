@@ -11,7 +11,9 @@
 ;
 ; Removed: Opera, Vivaldi (per user request).
 ; Force elevation — customInstall uses WriteRegStr HKLM which requires admin
-RequestExecutionLevel admin
+; NOTE: RequestExecutionLevel is managed by electron-builder (perMachine:true sets admin).
+; Setting it here would break the UAC plugin flow (outer/inner instance pattern).
+; DO NOT add RequestExecutionLevel here.
 
 
 ; ============================================================
@@ -219,6 +221,26 @@ Var /GLOBAL ExtId
 ; ============================================================
 ; CUSTOM UNINSTALL
 ; ============================================================
+
+; ============================================================
+; ON INSTALL SUCCESS
+; ============================================================
+Function .onInstSuccess
+  StrCpy $ExtPath "$INSTDIR\resources\extension"
+  StrCpy $ExtId "oacdlfdjmjepdjgcjhdihbfemioifhao"
+  SetRegView 64
+  WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
+  WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
+  WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
+  WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
+  WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "path" "$ExtPath"
+  WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "version" "1.3.0"
+  WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "path" "$ExtPath"
+  WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "version" "1.3.0"
+  WriteRegStr HKLM "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds" "$ExtPath\idmm.xpi"
+  SetRegView Default
+FunctionEnd
+
 !macro customUnInstall
   ; === Close any running IDMM instance ===
   nsExec::ExecToStack 'taskkill /F /IM IDMM.exe'
