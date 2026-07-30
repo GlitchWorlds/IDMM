@@ -10,6 +10,9 @@
 ; Firefox uses HKCU registry for native messaging + .xpi copy to profiles.
 ;
 ; Removed: Opera, Vivaldi (per user request).
+; Force elevation — customInstall uses WriteRegStr HKLM which requires admin
+RequestExecutionLevel admin
+
 
 ; ============================================================
 ; GLOBAL VARIABLES (set in customInstall, used in customUnInstall)
