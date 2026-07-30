@@ -61,9 +61,14 @@ Var /GLOBAL ExtId
     StrCpy $ChromePath "$LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
     Goto ChromeDetected
   ChromeSystemWide:
-  IfFileExists "$PROGRAMFILES\Google\Chrome\Application\chrome.exe" 0 ChromeDetected
+  IfFileExists "$PROGRAMFILES64\Google\Chrome\Application\chrome.exe" 0 ChromeSystemWide32
     StrCpy $FoundChrome "1"
-    StrCpy $ChromePath "$PROGRAMFILES\Google\Chrome\Application\chrome.exe"
+    StrCpy $ChromePath "$PROGRAMFILES64\Google\Chrome\Application\chrome.exe"
+    Goto ChromeDetected
+  ChromeSystemWide32:
+  IfFileExists "$PROGRAMFILES32\Google\Chrome\Application\chrome.exe" 0 ChromeDetected
+    StrCpy $FoundChrome "1"
+    StrCpy $ChromePath "$PROGRAMFILES32\Google\Chrome\Application\chrome.exe"
   ChromeDetected:
 
   ; --- Edge ---
