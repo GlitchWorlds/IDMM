@@ -1,4 +1,4 @@
-; IDMM NSIS Custom Installer Script v1.3.0
+﻿; IDMM NSIS Custom Installer Script v1.3.0
 ; Multi-browser extension installer: Chrome, Edge, Brave, Firefox
 ; Features: auto-start, extension auto-install via HKCU registry, desktop shortcuts, uninstall cleanup
 ;
@@ -92,9 +92,9 @@ Var /GLOBAL ExtId
   FirefoxDetected:
 
   ; ============================================================
-  ; CHROMIUM EXTENSION INSTALL (HKCU External Extension Registration)
+  ; CHROMIUM EXTENSION INSTALL (HKLM External Extension Registration)
   ;
-  ; How this works: Chrome/Edge/Brave scan HKCU\Software\<Browser>\Extensions\<id>\
+  ; How this works: Chrome/Edge/Brave scan HKLM\Software\<Browser>\Extensions\<id>\
   ; on startup for registry entries containing a "path" and "version" key.
   ; If the extension at that path has a matching "key" field in its
   ; manifest.json, Chrome loads it as a sideloaded extension with a stable ID.
@@ -104,27 +104,29 @@ Var /GLOBAL ExtId
   ; published on Chrome Web Store / Edge Addons.
   ; ============================================================
 
+  ; Force 64-bit registry view for 64-bit browsers
+  SetRegView 64
+
   ; --- Chrome ---
   StrCmp $FoundChrome "0" SkipChrome
-    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
-    WriteRegStr HKCU "Software\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
+    WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
+
+    WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
+    WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
+
+    WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
   SkipChrome:
 
   ; --- Edge ---
   StrCmp $FoundEdge "0" SkipEdge
-    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$ExtId" "path" "$ExtPath"
-    WriteRegStr HKCU "Software\Microsoft\Edge\Extensions\$ExtId" "version" "1.3.0"
+    WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "path" "$ExtPath"
+    WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "version" "1.3.0"
   SkipEdge:
 
-  ; --- Brave (HKCU registry + desktop shortcut fallback) ---
-  ;
-  ; Brave is Chromium-based and supports the same HKCU External Extension
-  ; registration mechanism. We write registry AND create a desktop shortcut
-  ; with --load-extension as a fallback in case Brave has patched this out.
-  ;
+  ; --- Brave (HKLM registry + desktop shortcut fallback) ---
   StrCmp $FoundBrave "0" SkipBrave
-    WriteRegStr HKCU "Software\BraveSoftware\Brave\Extensions\$ExtId" "path" "$ExtPath"
-    WriteRegStr HKCU "Software\BraveSoftware\Brave\Extensions\$ExtId" "version" "1.3.0"
+    WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "path" "$ExtPath"
+    WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "version" "1.3.0"
     CreateShortCut "$DESKTOP\IDMM - Brave.lnk" "$BravePath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Brave (with extension)"
   SkipBrave:
 
@@ -144,8 +146,8 @@ Var /GLOBAL ExtId
   ;   idmm-extension@glitchworlds
   ; ============================================================
   StrCmp $FoundFirefox "0" SkipFirefox
-    ; Step 1: Register via HKCU registry (primary method)
-    WriteRegStr HKCU "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds" "$ExtPath\idmm.xpi"
+    ; Step 1: Register via HKLM registry (primary method)
+    WriteRegStr HKLM "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds" "$ExtPath\idmm.xpi"
 
     ; Step 2: Copy to all active Firefox profiles (belt-and-suspenders)
     ; The profile extension directory requires the xpi to be named exactly
@@ -159,6 +161,8 @@ Var /GLOBAL ExtId
   ; ============================================================
   ; PROTOCOL HANDLER & FILE ASSOCIATION
   ; ============================================================
+  SetRegView Default
+
   WriteRegStr HKCU "Software\Classes\idmm" "" "URL:IDMM Download Protocol"
   WriteRegStr HKCU "Software\Classes\idmm" "URL Protocol" ""
   WriteRegStr HKCU "Software\Classes\idmm\shell\open\command" "" '"$INSTDIR\IDMM.exe" "%1"'
@@ -220,18 +224,21 @@ Var /GLOBAL ExtId
   ; ============================================================
   ; REMOVE BROWSER EXTENSION REGISTRY ENTRIES
   ; ============================================================
+  SetRegView 64
 
   ; --- Chrome ---
-  DeleteRegKey HKCU "Software\Google\Chrome\Extensions\$ExtId"
+  DeleteRegKey HKLM "Software\Google\Chrome\Extensions\$ExtId"
+
+  DeleteRegKey HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId"
 
   ; --- Edge ---
-  DeleteRegKey HKCU "Software\Microsoft\Edge\Extensions\$ExtId"
+  DeleteRegKey HKLM "Software\Microsoft\Edge\Extensions\$ExtId"
 
   ; --- Brave ---
-  DeleteRegKey HKCU "Software\BraveSoftware\Brave\Extensions\$ExtId"
+  DeleteRegKey HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId"
 
   ; --- Firefox ---
-  DeleteRegValue HKCU "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds"
+  DeleteRegValue HKLM "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds"
 
   ; ============================================================
   ; REMOVE FIREFOX .XPI FROM PROFILES
@@ -243,6 +250,7 @@ Var /GLOBAL ExtId
   ; ============================================================
   ; REMOVE PROTOCOL HANDLER & FILE ASSOCIATION
   ; ============================================================
+  SetRegView Default
   DeleteRegKey HKCU "Software\Classes\idmm"
   DeleteRegKey HKCU "Software\Classes\.idmm"
   DeleteRegKey HKCU "Software\Classes\IDMM.DownloadConfig"

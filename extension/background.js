@@ -1,27 +1,24 @@
 /**
- * IDMM Chrome Extension  Background Service Worker (Manifest V3)
+ * IDMM Chrome Extension — Background Service Worker (Manifest V3)
  *
- * 1. Intercepts browser downloads  sends to IDMM via REST API
+ * SIMPLE RELAY pattern:
+ * 1. Intercepts browser downloads → sends to IDMM desktop app via REST API
  * 2. Context menu: "Download with IDMM" for links/images/video/audio
- * 3. Badge showing active download count (poll every 2s)
- * 4. Handles messages from popup and options pages
+ * 3. Badge: "OFF" when server unreachable, blank when online
+ * 4. Message relay: forwards URLs from content script to desktop app
+ *
+ * This extension does NOT track download state, count active downloads,
+ * or maintain live server connections. The desktop app handles all of that.
  */
 
 importScripts('./lib/api-client.js');
 
-//  State 
+// ── State ──
 
 let serverOnline = false;
-let activeDownloadCount = 0;
 let interceptedIds = new Set(); // Track downloads we've intercepted to avoid loops
 
-// E5: WebSocket state
-let ws = null;
-let wsReconnectDelay = 1000; // Start at 1s, doubles on each failure, max 30s
-const WS_MAX_DELAY = 30000;
-const WS_URL = 'ws://127.0.0.1:9977/ws';
-
-//  Health Check 
+// ── Health Check ──
 
 async function checkServer() {
   serverOnline = await IDMM_API.healthCheck();
@@ -29,127 +26,54 @@ async function checkServer() {
   return serverOnline;
 }
 
-//  Badge 
+// ── Badge (OFF when offline, blank when online) ──
 
 function updateBadge() {
   if (!serverOnline) {
     chrome.action.setBadgeText({ text: 'OFF' });
     chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
-    return;
-  }
-
-  if (activeDownloadCount > 0) {
-    chrome.action.setBadgeText({ text: String(activeDownloadCount) });
-    chrome.action.setBadgeBackgroundColor({ color: '#3b82f6' });
   } else {
     chrome.action.setBadgeText({ text: '' });
   }
 }
 
-//  E5: WebSocket real-time sync 
+// ── Send Download to IDMM ──
 
-function connectWebSocket() {
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-    return; // Already connected or connecting
-  }
-
-  try {
-    ws = new WebSocket(WS_URL);
-  } catch {
-    scheduleReconnect();
-    return;
-  }
-
-  ws.onopen = () => {
-    console.log('[IDMM] WebSocket connected');
-    wsReconnectDelay = 1000; // Reset backoff on successful connection
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-
-      // Settings changed (from another client or desktop app)  update local cache
-      if (data.type === 'SETTINGS_CHANGED' && data.settings) {
-        const mapped = IDMM_API._mapServerToLocal(data.settings);
-        // Preserve extension-only settings (enabled)
-        chrome.storage.local.get('idmm_settings', (result) => {
-          const localOnly = result.idmm_settings || {};
-          const merged = { ...IDMM_API.defaultSettings(), ...mapped, enabled: localOnly.enabled ?? true };
-          chrome.storage.local.set({ idmm_settings: merged });
-        });
-        // Notify popup(s)
-        chrome.runtime.sendMessage({ type: 'SETTINGS_CHANGED' }).catch(() => {});
-        return;
-      }
-
-      // Broadcast download update to popup(s)
-      chrome.runtime.sendMessage({
-        type: 'DOWNLOAD_UPDATE',
-        downloads: data.downloads || data,
-      }).catch(() => {
-        // No listeners (popup closed)  not an error
-      });
-    } catch (err) {
-      console.warn('[IDMM] WebSocket message parse error:', err.message);
-    }
-  };
-
-  ws.onclose = () => {
-    console.log('[IDMM] WebSocket closed, reconnecting...');
-    ws = null;
-    scheduleReconnect();
-  };
-
-  ws.onerror = () => {
-    // onclose will fire after onerror  reconnect handled there
-  };
-}
-
-function scheduleReconnect() {
-  const delay = wsReconnectDelay;
-  wsReconnectDelay = Math.min(wsReconnectDelay * 2, WS_MAX_DELAY);
-  setTimeout(connectWebSocket, delay);
-}
-
-//  Send Download to IDMM 
-
-async function sendToIDMM({ url, filename, filesize, cookies, referrer }) {
+async function sendToIDMM({ url, filename, cookies, referrer }) {
   if (!serverOnline) {
-    console.log('[IDMM] Server offline, skipping intercept');
-    return false;
+    // Quick re-check before giving up
+    serverOnline = await IDMM_API.healthCheck();
+    if (!serverOnline) return false;
   }
 
   try {
-    // Get extension settings for defaults
-    const settings = await IDMM_API.getSettings();
-
     const result = await IDMM_API.startDownload({
       url,
       filename: filename || undefined,
       cookies: cookies || undefined,
       referrer: referrer || undefined,
-      threads: settings.maxThreads || undefined,
-      save_to: settings.defaultSavePath || undefined,
     });
 
-    console.log(`[IDMM] Download sent: ${result.filename} (${result.id})`);
-    activeDownloadCount++;
-    updateBadge();
+    console.log(`[IDMM] Download sent to server: ${result.filename || url}`);
     return true;
   } catch (err) {
     console.error('[IDMM] Failed to send download:', err.message);
+    // Mark offline if the request failed
+    if (err.message.includes('offline') || err.message.includes('timeout')) {
+      serverOnline = false;
+      updateBadge();
+    }
     return false;
   }
 }
 
-//  Download Interception 
+// ── Download Interception (auto-send to IDMM) ──
 
 chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
-  // Skip if we already intercepted this (avoid loops)
+  // Skip if we already intercepted this (avoid loops via multiple script contexts)
   if (interceptedIds.has(item.id)) {
     interceptedIds.delete(item.id);
-    suggest(); // Let browser handle
+    suggest();
     return;
   }
 
@@ -160,7 +84,7 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
     return;
   }
 
-  // Check if file should be intercepted
+  // Check if file should be intercepted based on rules
   const should = IDMM_API.shouldIntercept(
     item.filename,
     item.totalBytes,
@@ -182,26 +106,29 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
   });
 
   if (sent) {
-    // Intercept successful!
-    interceptedIds.delete(item.id); // Clean up tracking
-    // We MUST call cancel asynchronously to prevent Chrome from 
-    // resuming the default browser download when we call suggest.
+    // Track to prevent re-entry loops
+    interceptedIds.add(item.id);
+    // Cancel Chrome's native download — IDMM handles it now
+    // Call suggest() first to unblock Chrome's pipeline, then cancel async
+    suggest();
     setTimeout(() => {
       chrome.downloads.cancel(item.id, () => {
         chrome.downloads.erase({ id: item.id }, () => {});
       });
     }, 100);
-    
-    // Call suggest now to unblock Chrome's download pipeline
-    suggest();
     return;
   }
 
-  // If send failed, let browser handle it
+  // Send failed — let browser handle it normally
   suggest();
 });
 
-//  Context Menu 
+// Periodically clean interceptedIds to prevent memory leak
+setInterval(() => {
+  if (interceptedIds.size > 100) interceptedIds.clear();
+}, 60000);
+
+// ── Context Menu ──
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -274,141 +201,52 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-//  Polling for Active Downloads 
-
-// E11: Periodic cleanup of interceptedIds to prevent memory leak
-setInterval(() => {
-  if (interceptedIds.size > 100) interceptedIds.clear();
-}, 60000);
-
-async function pollDownloads() {
-  try {
-    const online = await IDMM_API.healthCheck();
-    if (!online) {
-      activeDownloadCount = 0;
-      serverOnline = false;
-      updateBadge();
-      return;
-    }
-    serverOnline = true;
-    const downloads = await IDMM_API.listDownloads();
-    const active = downloads.filter(d =>
-      d.status === 'downloading' || d.status === 'merging'
-    );
-    activeDownloadCount = active.length;
-    updateBadge();
-  } catch {
-    activeDownloadCount = 0;
-    serverOnline = false;
-    updateBadge();
-  }
-}
-
-//  Message Handlers (popup & options communication) 
+// ── Message Handlers (content script communication) ──
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Gap 3: Handle messages from content scripts (PAGE_METADATA)
-  if (message && message.type === 'PAGE_METADATA') {
-    // Log page metadata from content script
-    console.log(
-      `[IDMM] Content script metadata: ${message.pageTitle}`,
-      `(${message.downloadLinks?.length || 0} links, ${message.mediaUrls?.length || 0} media)`
-    );
-
-    // If the page has media URLs, log them for potential interception
-    if (message.mediaUrls && message.mediaUrls.length > 0) {
-      console.log('[IDMM] Media URLs detected:', message.mediaUrls);
-    }
-
-    // If the server is online and there are download links, we could
-    // optionally surface them (future: auto-intercept on page load)
-    if (serverOnline && message.downloadLinks && message.downloadLinks.length > 0) {
-      console.log(`[IDMM] ${message.downloadLinks.length} download link(s) available on page`);
-    }
-
-    // ACK to content script (no response needed but clean protocol)
-    sendResponse({ ok: true });
-    return;
-  }
-
-  // Handle async  return true to keep message channel open
+  // Handle async — return true to keep message channel open
   (async () => {
     switch (message.type) {
       case 'CHECK_STATUS':
         return { ok: true, online: serverOnline };
 
-      case 'GET_DOWNLOADS':
-        try {
-          const downloads = await IDMM_API.listDownloads();
-          return { ok: true, downloads };
-        } catch (err) {
-          return { ok: false, error: err.message, downloads: [] };
-        }
-
-      case 'PAUSE_DOWNLOAD':
-        try {
-          const result = await IDMM_API.pauseDownload(message.id);
-          return { ok: true, result };
-        } catch (err) {
-          return { ok: false, error: err.message };
-        }
-
-      case 'RESUME_DOWNLOAD':
-        try {
-          const result = await IDMM_API.resumeDownload(message.id);
-          return { ok: true, result };
-        } catch (err) {
-          return { ok: false, error: err.message };
-        }
-
-      case 'CANCEL_DOWNLOAD':
-        try {
-          const result = await IDMM_API.cancelDownload(message.id);
-          return { ok: true, result };
-        } catch (err) {
-          return { ok: false, error: err.message };
-        }
-
-      case 'DELETE_DOWNLOAD':
-        try {
-          const result = await IDMM_API.deleteDownload(message.id);
-          return { ok: true, result };
-        } catch (err) {
-          return { ok: false, error: err.message };
-        }
-
       case 'SEND_URL_TO_IDMM':
         try {
-          // Ensure server is checked before sending
-          if (!serverOnline) {
-            serverOnline = await IDMM_API.healthCheck();
-            if (!serverOnline) {
-              return { ok: false, error: 'IDMM server is offline. Please open the IDMM desktop app first.' };
-            }
+          // Always do a fresh health check (don't rely on stale cached flag)
+          const online = await IDMM_API.healthCheck();
+          serverOnline = online;
+          updateBadge();
+          if (!online) {
+            return { ok: false, error: 'IDMM server is offline. Please open the IDMM desktop app first.' };
           }
           const result = await IDMM_API.startDownload(message.downloadInfo);
-          activeDownloadCount++;
-          updateBadge();
           return { ok: true, result };
         } catch (err) {
+          if (err.message.includes('offline') || err.message.includes('timeout')) {
+            serverOnline = false;
+            updateBadge();
+          }
           return { ok: false, error: err.message };
         }
 
-      case 'ADD_DOWNLOAD':
+      case 'GET_SETTINGS':
         try {
-          const result = await IDMM_API.startDownload(message.downloadInfo);
-          return { ok: true, result };
+          const settings = await IDMM_API.getSettings();
+          return { ok: true, settings };
         } catch (err) {
           return { ok: false, error: err.message };
         }
 
-      case 'SETTINGS_UPDATED':
-        // E10: Broadcast to all popup instances so they can refresh settings
-        chrome.runtime.sendMessage({ type: 'SETTINGS_UPDATED' }).catch(() => {});
-        return { ok: true };
+      case 'SAVE_SETTINGS':
+        try {
+          await IDMM_API.saveSettings(message.settings);
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: err.message };
+        }
 
       default:
-        return { ok: false, error: `Unknown message type: ${message.type}` };
+        return { ok: false, error: 'Unknown message type: ' + message.type };
     }
   })().then(sendResponse).catch(err => {
     sendResponse({ ok: false, error: err.message });
@@ -417,19 +255,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep channel open for async response
 });
 
-//  Startup 
+// ── Startup ──
 
 (async function init() {
-  // Initial health check
   await checkServer();
-
-  // E5: Start WebSocket for real-time updates
-  connectWebSocket();
-
-  // Periodic checks (fallback polling)
-  setInterval(checkServer, 10000); // Health check every 10s
-  setInterval(pollDownloads, 5000); // E5: Poll downloads every 5s (reduced from 2s)
-
-  console.log('[IDMM] Extension service worker started');
+  // Re-check server health every 15 seconds
+  setInterval(checkServer, 15000);
+  console.log('[IDMM] Extension service worker started (relay mode)');
 })();
-
