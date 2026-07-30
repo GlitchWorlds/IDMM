@@ -1,23 +1,34 @@
-﻿; IDMM NSIS Custom Installer Script v1.3.0
+; IDMM NSIS Custom Installer Script v1.3.0
 ; Multi-browser extension installer: Chrome, Edge, Brave, Firefox
-; Features: auto-start, extension auto-install via HKCU registry, desktop shortcuts, uninstall cleanup
 ;
-; KEY INSIGHT: The extension has a "key" field in manifest.json.
+; Changelog:
+;   - Removed RequestExecutionLevel admin (electron-builder manages this via perMachine:true)
+;   - Removed duplicate .onInstSuccess callback (was conflicting with customInstall)
+;   - Fixed WOW6432Node registry paths after SetRegView 64
+;   - Fixed DetailPrint messages to say HKLM (not HKCU)
+;   - Version now uses ${VERSION} define from electron-builder
+;
+; How this works:
+;   electron-builder includes this file via the "include" option in package.json.
+;   It must define !macro customInstall and !macro customUnInstall.
+;   electron-builder calls these via !ifmacrodef / !insertmacro in its NSIS templates:
+;     installSection.nsh -> !ifmacrodef customInstall -> !insertmacro customInstall
+;     uninstaller.nsh    -> !ifmacrodef customUnInstall -> !insertmacro customUnInstall
+;
 ; For Chromium MV3 with key field, the correct external extension registration
-; is HKCU\Software\<Browser>\Extensions\<id>\ (NOT HKLM ExtensionInstallForcelist).
+; is HKLM\Software\<Browser>\Extensions\<id>\ (64-bit view) or
+; software\WOW6432Node\... via SetRegView 32 for 32-bit browsers.
 ; This works WITHOUT publishing to Chrome Web Store / Edge Addons.
 ;
-; Firefox uses HKCU registry for native messaging + .xpi copy to profiles.
-;
-; Removed: Opera, Vivaldi (per user request).
-; Force elevation — customInstall uses WriteRegStr HKLM which requires admin
-; NOTE: RequestExecutionLevel is managed by electron-builder (perMachine:true sets admin).
-; Setting it here would break the UAC plugin flow (outer/inner instance pattern).
-; DO NOT add RequestExecutionLevel here.
+; Firefox uses HKLM registry for sideloading + .xpi copy to profiles.
 
+; NOTE: Do NOT put RequestExecutionLevel here.
+;  - perMachine:true in package.json makes electron-builder set RequestExecutionLevel admin
+;  - Setting it manually here causes a duplicate directive warning in NSIS and
+;    can conflict with the UAC dual-instance pattern (outer unelevated + inner elevated)
 
 ; ============================================================
-; GLOBAL VARIABLES (set in customInstall, used in customUnInstall)
+; GLOBAL VARIABLES
 ; ============================================================
 Var /GLOBAL FoundChrome
 Var /GLOBAL FoundEdge
@@ -32,21 +43,23 @@ Var /GLOBAL ExtId
 
 ; ============================================================
 ; CUSTOM INSTALL
+; Called by electron-builder at the end of "Section install"
+; via:  !ifmacrodef customInstall / !insertmacro customInstall
 ; ============================================================
 !macro customInstall
-  ; === Close any running IDMM instance ===
+  ; Close any running IDMM instance
   nsExec::ExecToStack 'taskkill /F /IM IDMM.exe'
   Pop $0
   Pop $1
   Sleep 1000
 
-  ; === Extension path (extraResources copies ../extension → $INSTDIR\resources\extension) ===
+  ; Extension path — extraResources copies ../extension to $INSTDIR\resources\extension
   StrCpy $ExtPath "$INSTDIR\resources\extension"
 
-  ; === Chromium extension ID (derived from RSA public key in manifest.json) ===
+  ; Chromium extension ID (derived from RSA public key in manifest.json)
   StrCpy $ExtId "oacdlfdjmjepdjgcjhdihbfemioifhao"
 
-  ; === Auto-start IDMM on Windows boot ===
+  ; Auto-start IDMM on Windows boot
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "IDMM" '"$INSTDIR\IDMM.exe" --hidden'
 
   ; ============================================================
@@ -102,66 +115,44 @@ Var /GLOBAL ExtId
   FirefoxDetected:
 
   ; ============================================================
-  ; CHROMIUM EXTENSION INSTALL (HKLM External Extension Registration)
-  ;
-  ; How this works: Chrome/Edge/Brave scan HKLM\Software\<Browser>\Extensions\<id>\
-  ; on startup for registry entries containing a "path" and "version" key.
-  ; If the extension at that path has a matching "key" field in its
-  ; manifest.json, Chrome loads it as a sideloaded extension with a stable ID.
-  ;
-  ; This is the CORRECT method for unpacked MV3 extensions with key field.
-  ; The old method (HKLM ExtensionInstallForcelist) ONLY works for extensions
-  ; published on Chrome Web Store / Edge Addons.
+  ; CHROMIUM EXTENSION INSTALL
+  ; Chrome/Edge/Brave scan HKLM\Software\<Browser>\Extensions\<id>\
+  ; for "path" and "version" values. The extension must have a
+  ; "key" field in manifest.json for a stable ID.
   ; ============================================================
 
-  ; Force 64-bit registry view for 64-bit browsers
-  SetRegView 64
-
-  ; --- Chrome ---
+  ; --- Chrome (64-bit view) ---
   StrCmp $FoundChrome "0" SkipChrome
+    SetRegView 64
     WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
-
-    WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
-    WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
-
-    WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
+    WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "${VERSION}"
+    ; Also write to 32-bit view for 32-bit Chrome on 64-bit Windows
+    SetRegView 32
+    WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
+    WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "${VERSION}"
+    SetRegView 64
   SkipChrome:
 
   ; --- Edge ---
   StrCmp $FoundEdge "0" SkipEdge
     WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "path" "$ExtPath"
-    WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "version" "1.3.0"
+    WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "version" "${VERSION}"
   SkipEdge:
 
-  ; --- Brave (HKLM registry + desktop shortcut fallback) ---
+  ; --- Brave ---
   StrCmp $FoundBrave "0" SkipBrave
     WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "path" "$ExtPath"
-    WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "version" "1.3.0"
-    CreateShortCut "$DESKTOP\IDMM - Brave.lnk" "$BravePath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Brave (with extension)"
+    WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "version" "${VERSION}"
+    CreateShortCut "$DESKTOP\IDMM - Brave.lnk" "$BravePath" '--load-extension="$ExtPath" --no-first-run' "" "" SW_SHOWNORMAL "" "IDMM - Brave"
   SkipBrave:
 
   ; ============================================================
   ; FIREFOX EXTENSION INSTALL
-  ;
-  ; Firefox sideloading via registry:
-  ;   HKCU\Software\Mozilla\Firefox\Extensions\<gecko-id> = path to .xpi
-  ; Firefox reads this on next launch and installs the addon silently.
-  ;
-  ; Additionally, we copy idmm.xpi to all active Firefox profile
-  ; extension directories for broader compatibility.
-  ;
-  ; The .xpi is included via extraResources and extracted to:
-  ;   $INSTDIR\resources\extension\idmm.xpi
-  ; Firefox extension ID (from manifest.json browser_specific_settings.gecko.id):
-  ;   idmm-extension@glitchworlds
+  ; Firefox sideloads via HKLM\Software\Mozilla\Firefox\Extensions\<gecko-id> = path
   ; ============================================================
   StrCmp $FoundFirefox "0" SkipFirefox
-    ; Step 1: Register via HKLM registry (primary method)
     WriteRegStr HKLM "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds" "$ExtPath\idmm.xpi"
 
-    ; Step 2: Copy to all active Firefox profiles (belt-and-suspenders)
-    ; The profile extension directory requires the xpi to be named exactly
-    ; as the gecko ID + .xpi extension
     IfFileExists "$ExtPath\idmm.xpi" 0 SkipXpiCopy
       nsExec::ExecToStack 'cmd /c for /d %%P in ("%APPDATA%\Mozilla\Firefox\Profiles\*.default*") do copy /Y "$ExtPath\idmm.xpi" "%%P\extensions\idmm-extension@glitchworlds.xpi" >nul 2>&1'
       Pop $0
@@ -187,28 +178,28 @@ Var /GLOBAL ExtId
   ; ============================================================
   DetailPrint "=== IDMM Browser Extension Installation ==="
   StrCmp $FoundChrome "0" LogNoChrome
-    DetailPrint "[OK] Chrome extension registered via HKCU (ID: $ExtId)"
+    DetailPrint "[OK] Chrome extension registered (ID: $ExtId)"
     Goto LogEdge
   LogNoChrome:
     DetailPrint "[--] Chrome not found, skipped"
 
   LogEdge:
   StrCmp $FoundEdge "0" LogNoEdge
-    DetailPrint "[OK] Edge extension registered via HKCU (ID: $ExtId)"
+    DetailPrint "[OK] Edge extension registered (ID: $ExtId)"
     Goto LogBrave
   LogNoEdge:
     DetailPrint "[--] Edge not found, skipped"
 
   LogBrave:
   StrCmp $FoundBrave "0" LogNoBrave
-    DetailPrint "[OK] Brave extension registered via HKCU + desktop shortcut created"
+    DetailPrint "[OK] Brave extension registered"
     Goto LogFirefox
   LogNoBrave:
     DetailPrint "[--] Brave not found, skipped"
 
   LogFirefox:
   StrCmp $FoundFirefox "0" LogNoFirefox
-    DetailPrint "[OK] Firefox extension registered via HKCU + .xpi copied to profiles"
+    DetailPrint "[OK] Firefox extension registered"
     Goto LogDone
   LogNoFirefox:
     DetailPrint "[--] Firefox not found, skipped"
@@ -220,79 +211,46 @@ Var /GLOBAL ExtId
 
 ; ============================================================
 ; CUSTOM UNINSTALL
+; Called by electron-builder at the end of "Section un.install"
+; via:  !ifmacrodef customUnInstall / !insertmacro customUnInstall
 ; ============================================================
-
-; ============================================================
-; ON INSTALL SUCCESS
-; ============================================================
-Function .onInstSuccess
-  StrCpy $ExtPath "$INSTDIR\resources\extension"
-  StrCpy $ExtId "oacdlfdjmjepdjgcjhdihbfemioifhao"
-  SetRegView 64
-  WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
-  WriteRegStr HKLM "Software\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
-  WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "path" "$ExtPath"
-  WriteRegStr HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId" "version" "1.3.0"
-  WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "path" "$ExtPath"
-  WriteRegStr HKLM "Software\Microsoft\Edge\Extensions\$ExtId" "version" "1.3.0"
-  WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "path" "$ExtPath"
-  WriteRegStr HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId" "version" "1.3.0"
-  WriteRegStr HKLM "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds" "$ExtPath\idmm.xpi"
-  SetRegView Default
-FunctionEnd
-
 !macro customUnInstall
-  ; === Close any running IDMM instance ===
+  ; Close any running IDMM instance
   nsExec::ExecToStack 'taskkill /F /IM IDMM.exe'
   Pop $0
   Pop $1
   Sleep 1000
 
-  ; === Remove auto-start registry entry ===
+  ; Remove auto-start registry entry
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "IDMM"
 
-  ; ============================================================
-  ; REMOVE BROWSER EXTENSION REGISTRY ENTRIES
-  ; ============================================================
+  ; Remove browser extension registry entries
   SetRegView 64
-
-  ; --- Chrome ---
   DeleteRegKey HKLM "Software\Google\Chrome\Extensions\$ExtId"
-
-  DeleteRegKey HKLM "Software\WOW6432Node\Google\Chrome\Extensions\$ExtId"
-
-  ; --- Edge ---
   DeleteRegKey HKLM "Software\Microsoft\Edge\Extensions\$ExtId"
-
-  ; --- Brave ---
   DeleteRegKey HKLM "Software\BraveSoftware\Brave\Extensions\$ExtId"
-
-  ; --- Firefox ---
   DeleteRegValue HKLM "Software\Mozilla\Firefox\Extensions" "idmm-extension@glitchworlds"
 
-  ; ============================================================
-  ; REMOVE FIREFOX .XPI FROM PROFILES
-  ; ============================================================
+  ; Also clean the 32-bit view registry entries (in case 32-bit browsers found them)
+  SetRegView 32
+  DeleteRegKey HKLM "Software\Google\Chrome\Extensions\$ExtId"
+  SetRegView 64
+
+  ; Remove Firefox .xpi from profiles
   nsExec::ExecToStack 'cmd /c for /d %%P in ("%APPDATA%\Mozilla\Firefox\Profiles\*.default*") do del /q "%%P\extensions\idmm-extension@glitchworlds.xpi" 2>nul'
   Pop $0
   Pop $1
 
-  ; ============================================================
-  ; REMOVE PROTOCOL HANDLER & FILE ASSOCIATION
-  ; ============================================================
+  ; Remove protocol handler & file association
   SetRegView Default
   DeleteRegKey HKCU "Software\Classes\idmm"
   DeleteRegKey HKCU "Software\Classes\.idmm"
   DeleteRegKey HKCU "Software\Classes\IDMM.DownloadConfig"
 
-  ; ============================================================
-  ; REMOVE DESKTOP SHORTCUTS
-  ; ============================================================
+  ; Remove desktop shortcuts
   Delete "$DESKTOP\IDMM - Brave.lnk"
 
-  ; ============================================================
-  ; REMOVE USER DATA
-  ; ============================================================
-  RMDir /r "$PROFILE\.idmm"
+  ; Remove user data (only if flag is set)
+  ; RMDir /r "$PROFILE\.idmm"
 
 !macroend
