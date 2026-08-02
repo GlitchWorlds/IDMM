@@ -617,6 +617,9 @@ class IDMMServer {
 
   _isAllowedOrigin(origin) {
     return (
+      origin === 'file://' ||
+      origin.startsWith('file://') ||
+      origin === 'null' || // Electron file:// pages send 'null' origin in some versions
       origin.startsWith('http://localhost:') ||
       origin.startsWith('http://127.0.0.1:') ||
       origin.startsWith('https://localhost:') ||
