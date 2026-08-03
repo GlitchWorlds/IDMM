@@ -1,6 +1,4 @@
 import { memo } from 'react';
-import SpeedGraph from './SpeedGraph';
-import { formatSpeed } from '../api';
 
 const NAV_ITEMS = [
   { key: 'all', label: 'All Downloads', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
@@ -8,17 +6,18 @@ const NAV_ITEMS = [
   { key: 'completed', label: 'Completed', icon: 'M5 13l4 4L19 7' },
   { key: 'paused', label: 'Paused', icon: 'M10 9v6m4-6v6' },
   { key: 'queue', label: 'Queue', icon: 'M12 8v4l3 3' },
+  { key: 'settings', label: 'Settings', icon: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z' },
 ];
 
-function Sidebar({ filter, onFilterChange, onSettingsClick, style }) {
+function Sidebar({ filter, onFilterChange, style }) {
   return (
-    <aside className="w-64 bg-slate-950 border-r border-slate-800 flex flex-col h-full shrink-0" style={{ ...style, WebkitAppRegion: 'drag' }}>
+    <aside className="w-64 base-bg border-r border-theme flex flex-col h-full shrink-0" style={{ ...style, WebkitAppRegion: 'drag' }}>
       {/* Logo */}
-      <div className="p-6 border-b border-slate-800" style={{ WebkitAppRegion: 'drag' }}>
-        <h1 className="text-xl font-bold bg-gradient-to-r from-accent to-purple-500 bg-clip-text text-transparent">
+      <div className="p-6 border-b border-theme" style={{ WebkitAppRegion: 'drag' }}>
+        <h1 className="text-xl font-bold text-main">
           IDMM
         </h1>
-        <p className="text-xs text-slate-500 mt-1">Download Manager</p>
+        <p className="text-xs text-muted mt-1">Download Manager</p>
       </div>
 
       {/* Navigation */}
@@ -29,8 +28,8 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, style }) {
             onClick={() => onFilterChange(item.key)}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
               filter === item.key
-                ? 'nav-active text-accent font-medium'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                ? 'nav-active text-main font-medium'
+                : 'text-muted hover:text-main hover:bg-surface'
             }`}
           >
             <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -40,21 +39,6 @@ function Sidebar({ filter, onFilterChange, onSettingsClick, style }) {
           </button>
         ))}
       </nav>
-
-      {/* Settings */}
-      <div className="p-3 border-t border-slate-800" style={{ WebkitAppRegion: 'no-drag' }}>
-        <button
-          onClick={onSettingsClick}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round"
-              d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-          </svg>
-          <span>Settings</span>
-        </button>
-      </div>
     </aside>
   );
 }

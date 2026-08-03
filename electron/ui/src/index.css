@@ -4,37 +4,108 @@
 @theme {
   --color-slate-850: var(--bg-surface);
   --color-slate-950: var(--bg-base);
+  --color-slate-900: var(--bg-base);
+  --color-slate-800: var(--bg-surface);
+  --color-slate-700: var(--border-color);
+  --color-slate-600: var(--text-muted);
+  --color-slate-500: var(--text-muted);
+  --color-slate-400: var(--text-muted);
+  --color-slate-300: var(--text-main);
+  --color-slate-200: var(--text-main);
+  --color-slate-100: var(--text-main);
   --color-accent: var(--accent);
   --color-accent-dim: var(--accent-dim);
   --color-accent-glow: var(--accent-glow);
 }
 
-:root {
-  /* Default: Dark Theme (Monochromatic slate with soft blue accent) */
-  --bg-base: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-surface-hover: rgba(30, 41, 59, 0.8);
+/* ── Dark — design-linear.app.md (canvas #010102, primary #5e6ad2) ── */
+[data-theme="dark"] {
+  --bg-base: #010102;
+  --bg-surface: #0e0e12;
+  --bg-surface-hover: rgba(30, 30, 40, 0.8);
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent: #3b82f6;
-  --accent-dim: #2563eb;
-  --accent-glow: rgba(59, 130, 246, 0.25);
-  --border-color: #334155;
-  --progress-gradient: linear-gradient(90deg, #3b82f6, #60a5fa);
+  --text-muted: #8b8b96;
+  --accent: #5e6ad2;
+  --accent-dim: #4b56b8;
+  --accent-glow: rgba(94, 106, 210, 0.25);
+  --border-color: #232329;
+  --progress-gradient: linear-gradient(90deg, #5e6ad2, #8b93e8);
+  --status-completed: #34d399;
+  --status-paused: #fbbf24;
+  --status-error: #f87171;
+  --status-cancelled: #8b8b96;
 }
 
-[data-theme="light"] {
-  /* Light Theme (Clean white/gray with matching soft blue accent) */
-  --bg-base: #f1f5f9;
+/* ── White — design-apple.md (canvas #ffffff, primary #0066cc) ── */
+[data-theme="white"] {
+  --bg-base: #ffffff;
+  --bg-surface: #f5f5f7;
+  --bg-surface-hover: rgba(245, 245, 247, 0.9);
+  --text-main: #1d1d1f;
+  --text-muted: #86868b;
+  --accent: #0066cc;
+  --accent-dim: #005bb5;
+  --accent-glow: rgba(0, 102, 204, 0.15);
+  --border-color: #d2d2d7;
+  --progress-gradient: linear-gradient(90deg, #0066cc, #4a9be0);
+  --status-completed: #1a7f37;
+  --status-paused: #b25000;
+  --status-error: #d70015;
+  --status-cancelled: #86868b;
+}
+
+/* ── Brown — design-starbucks.md (canvas #f2f0eb, primary #006241) ── */
+[data-theme="brown"] {
+  --bg-base: #f2f0eb;
   --bg-surface: #ffffff;
-  --bg-surface-hover: rgba(241, 245, 249, 0.8);
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --accent: #2563eb;
-  --accent-dim: #1d4ed8;
-  --accent-glow: rgba(37, 99, 235, 0.2);
-  --border-color: #e2e8f0;
-  --progress-gradient: linear-gradient(90deg, #2563eb, #3b82f6);
+  --bg-surface-hover: rgba(237, 235, 233, 0.9);
+  --text-main: rgba(0, 0, 0, 0.87);
+  --text-muted: rgba(0, 0, 0, 0.55);
+  --accent: #006241;
+  --accent-dim: #00512f;
+  --accent-glow: rgba(0, 98, 65, 0.15);
+  --border-color: #e0ddd5;
+  --progress-gradient: linear-gradient(90deg, #006241, #0d7a55);
+  --status-completed: #006241;
+  --status-paused: #a67c00;
+  --status-error: #c0342a;
+  --status-cancelled: rgba(0, 0, 0, 0.45);
+}
+
+/* ── Pinky — design-airbnb.md (canvas #ffffff, primary #ff385c) ── */
+[data-theme="pinky"] {
+  --bg-base: #ffffff;
+  --bg-surface: #f7f7f7;
+  --bg-surface-hover: rgba(247, 247, 247, 0.9);
+  --text-main: #222222;
+  --text-muted: #717171;
+  --accent: #ff385c;
+  --accent-dim: #e31c5f;
+  --accent-glow: rgba(255, 56, 92, 0.15);
+  --border-color: #dddddd;
+  --progress-gradient: linear-gradient(90deg, #ff385c, #ff7a93);
+  --status-completed: #008a05;
+  --status-paused: #b45309;
+  --status-error: #c13515;
+  --status-cancelled: #717171;
+}
+
+:root,
+[data-theme="dark"] {
+  --bg-base: #010102;
+  --bg-surface: #0e0e12;
+  --bg-surface-hover: rgba(30, 30, 40, 0.8);
+  --text-main: #f8fafc;
+  --text-muted: #8b8b96;
+  --accent: #5e6ad2;
+  --accent-dim: #4b56b8;
+  --accent-glow: rgba(94, 106, 210, 0.25);
+  --border-color: #232329;
+  --progress-gradient: linear-gradient(90deg, #5e6ad2, #8b93e8);
+  --status-completed: #34d399;
+  --status-paused: #fbbf24;
+  --status-error: #f87171;
+  --status-cancelled: #8b8b96;
 }
 
 body {
@@ -86,15 +157,14 @@ body {
   border-left: 3px solid var(--accent);
 }
 
-/* Global style overrides for Light Theme text contrast */
-[data-theme="light"] .text-slate-100, 
-[data-theme="light"] .text-slate-200, 
-[data-theme="light"] .text-white { color: #0f172a !important; }
-[data-theme="light"] .text-slate-400, 
-[data-theme="light"] .text-slate-500 { color: #475569 !important; }
-[data-theme="light"] .bg-slate-900, 
-[data-theme="light"] .bg-slate-950 { background-color: #ffffff !important; border-color: #e2e8f0 !important; }
-[data-theme="light"] .bg-slate-800 { background-color: #f1f5f9 !important; }
-[data-theme="light"] .bg-slate-700 { background-color: #e2e8f0 !important; }
-[data-theme="light"] .border-slate-800, 
-[data-theme="light"] .border-slate-700 { border-color: #cbd5e1 !important; }
+/* Semantic surface/input helpers (components use these instead of slate hardcodes) */
+.surface { background: var(--bg-surface); }
+.surface-hover { background: var(--bg-surface-hover); }
+.base-bg { background: var(--bg-base); }
+.text-main { color: var(--text-main); }
+.text-muted { color: var(--text-muted); }
+.border-theme { border-color: var(--border-color); }
+.status-completed { color: var(--status-completed); }
+.status-paused { color: var(--status-paused); }
+.status-error { color: var(--status-error); }
+.status-cancelled { color: var(--status-cancelled); }

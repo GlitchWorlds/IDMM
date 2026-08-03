@@ -1,14 +1,14 @@
 /**
  * IDMM Chrome Extension — Background Service Worker (Manifest V3)
  *
- * SIMPLE RELAY pattern:
- * 1. Intercepts browser downloads → sends to IDMM desktop app via REST API
- * 2. Context menu: "Download with IDMM" for links/images/video/audio
- * 3. Badge: "OFF" when server unreachable, blank when online
- * 4. Message relay: forwards URLs from content script to desktop app
+ * Relay murni:
+ * 1. Terima URL dari content script (klik link download) → kirim ke IDMM via REST.
+ * 2. Fallback: intercept chrome.downloads (download yang diinisiasi JavaScript)
+ *    → batalkan download browser, kirim URL ke IDMM.
+ * 3. Context menu "Download with IDMM" untuk link/media/seleksi.
+ * 4. Badge "OFF" saat server tidak bisa dijangkau.
  *
- * This extension does NOT track download state, count active downloads,
- * or maintain live server connections. The desktop app handles all of that.
+ * Tidak ada popup UI. Tidak melacak status download (desktop app yang pegang).
  */
 
 importScripts('./lib/api-client.js');
@@ -16,17 +16,14 @@ importScripts('./lib/api-client.js');
 // ── State ──
 
 let serverOnline = false;
-let interceptedIds = new Set(); // Track downloads we've intercepted to avoid loops
 
-// ── Health Check ──
+// ── Health Check / Badge ──
 
 async function checkServer() {
   serverOnline = await IDMM_API.healthCheck();
   updateBadge();
   return serverOnline;
 }
-
-// ── Badge (OFF when offline, blank when online) ──
 
 function updateBadge() {
   if (!serverOnline) {
@@ -37,13 +34,13 @@ function updateBadge() {
   }
 }
 
-// ── Send Download to IDMM ──
+// ── Kirim download ke IDMM ──
 
 async function sendToIDMM({ url, filename, cookies, referrer }) {
   if (!serverOnline) {
-    // Quick re-check before giving up
     serverOnline = await IDMM_API.healthCheck();
-    if (!serverOnline) return false;
+    updateBadge();
+    if (!serverOnline) return { ok: false, error: 'IDMM server offline. Buka aplikasi IDMM dulu.' };
   }
 
   try {
@@ -53,77 +50,71 @@ async function sendToIDMM({ url, filename, cookies, referrer }) {
       cookies: cookies || undefined,
       referrer: referrer || undefined,
     });
-
-    console.log(`[IDMM] Download sent to server: ${result.filename || url}`);
-    return true;
+    return { ok: true, result };
   } catch (err) {
-    console.error('[IDMM] Failed to send download:', err.message);
-    // Mark offline if the request failed
+    console.error('[IDMM] Gagal kirim download:', err.message);
     if (err.message.includes('offline') || err.message.includes('timeout')) {
       serverOnline = false;
       updateBadge();
     }
-    return false;
+    return { ok: false, error: err.message };
   }
 }
 
-// ── Download Interception (auto-send to IDMM) ──
+async function getTabCookies(url, tab) {
+  if (!url) return '';
+  try {
+    const cookieList = await chrome.cookies.getAll({ url });
+    return cookieList.map(c => `${c.name}=${c.value}`).join('; ');
+  } catch {
+    return '';
+  }
+}
+
+// ── Intercept Download Browser (fallback untuk download JS-initiated) ──
+
+const interceptedIds = new Set();
 
 chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
-  // Skip if we already intercepted this (avoid loops via multiple script contexts)
   if (interceptedIds.has(item.id)) {
     interceptedIds.delete(item.id);
     suggest();
     return;
   }
 
-  // Check settings
   const settings = await IDMM_API.getSettings();
   if (!settings.enabled) {
     suggest();
     return;
   }
 
-  // Check if file should be intercepted based on rules
-  const should = IDMM_API.shouldIntercept(
-    item.filename,
-    item.totalBytes,
-    settings
-  );
-
+  const should = IDMM_API.shouldIntercept(item.filename, item.totalBytes, settings);
   if (!should) {
     suggest();
     return;
   }
 
-  // Send to IDMM
   const sent = await sendToIDMM({
     url: item.finalUrl || item.url,
     filename: item.filename,
-    filesize: item.totalBytes,
-    cookies: item.cookie,
-    referrer: item.referrer,
+    cookies: item.cookie || '',
+    referrer: item.referrer || '',
   });
 
-  if (sent) {
-    // Track to prevent re-entry loops
+  if (sent.ok) {
     interceptedIds.add(item.id);
-    // Cancel Chrome's native download — IDMM handles it now
-    // Call suggest() first to unblock Chrome's pipeline, then cancel async
-    suggest();
+    suggest(); // Buka pipeline Chrome dulu, lalu batalkan — IDMM yang handle
     setTimeout(() => {
       chrome.downloads.cancel(item.id, () => {
         chrome.downloads.erase({ id: item.id }, () => {});
       });
     }, 100);
-    return;
+  } else {
+    suggest(); // Gagal kirim — biarkan browser download normal
   }
-
-  // Send failed — let browser handle it normally
-  suggest();
 });
 
-// Periodically clean interceptedIds to prevent memory leak
+// Bersihkan set agar tidak bocor memori
 setInterval(() => {
   if (interceptedIds.size > 100) interceptedIds.clear();
 }, 60000);
@@ -131,22 +122,22 @@ setInterval(() => {
 // ── Context Menu ──
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: 'idmm-download-link',
-    title: 'Download with IDMM',
-    contexts: ['link'],
-  });
-
-  chrome.contextMenus.create({
-    id: 'idmm-download-media',
-    title: 'Download with IDMM',
-    contexts: ['image', 'video', 'audio'],
-  });
-
-  chrome.contextMenus.create({
-    id: 'idmm-download-selection',
-    title: 'Download selected URL with IDMM',
-    contexts: ['selection'],
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: 'idmm-download-link',
+      title: 'Download with IDMM',
+      contexts: ['link'],
+    });
+    chrome.contextMenus.create({
+      id: 'idmm-download-media',
+      title: 'Download with IDMM',
+      contexts: ['image', 'video', 'audio'],
+    });
+    chrome.contextMenus.create({
+      id: 'idmm-download-selection',
+      title: 'Download selected URL with IDMM',
+      contexts: ['selection'],
+    });
   });
 });
 
@@ -165,82 +156,77 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       try {
         new URL(text);
         url = text;
-      } catch {
-        console.log('[IDMM] Selection is not a valid URL');
-      }
+      } catch { /* bukan URL */ }
       break;
     }
   }
 
   if (!url) return;
 
-  // Extract cookies from current tab
-  let cookies = '';
-  try {
-    const cookieList = await chrome.cookies.getAll({ url });
-    cookies = cookieList.map(c => `${c.name}=${c.value}`).join('; ');
-  } catch {
-    // Cookies API may not be available without permission
-  }
+  const cookies = await getTabCookies(url, tab);
+  const sent = await sendToIDMM({ url, cookies, referrer: tab?.url || '' });
 
-  const sent = await sendToIDMM({
-    url,
-    cookies,
-    referrer: tab?.url || '',
-  });
-
-  if (sent) {
+  if (sent.ok) {
     try {
       chrome.notifications?.create({
         type: 'basic',
         iconUrl: 'icons/icon128.png',
         title: 'IDMM',
-        message: 'Download sent to IDMM',
+        message: 'Download dikirim ke IDMM',
       });
-    } catch { /* notifications may not be available */ }
+    } catch { /* notifikasi opsional */ }
+  } else {
+    try {
+      chrome.notifications?.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'IDMM',
+        message: sent.error || 'Gagal mengirim download',
+      });
+    } catch { /* noop */ }
   }
 });
 
-// ── Message Handlers (content script communication) ──
+// ── Message Handlers (dari content script) ──
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Handle async — return true to keep message channel open
   (async () => {
     switch (message.type) {
       case 'CHECK_STATUS':
         return { ok: true, online: serverOnline };
 
-      case 'SEND_URL_TO_IDMM':
-        try {
-          // Always do a fresh health check (don't rely on stale cached flag)
-          const online = await IDMM_API.healthCheck();
-          serverOnline = online;
-          updateBadge();
-          if (!online) {
-            return { ok: false, error: 'IDMM server is offline. Please open the IDMM desktop app first.' };
-          }
-          const result = await IDMM_API.startDownload(message.downloadInfo);
-          return { ok: true, result };
-        } catch (err) {
-          if (err.message.includes('offline') || err.message.includes('timeout')) {
-            serverOnline = false;
-            updateBadge();
-          }
-          return { ok: false, error: err.message };
+      case 'SEND_URL_TO_IDMM': {
+        const online = await IDMM_API.healthCheck();
+        serverOnline = online;
+        updateBadge();
+        if (!online) {
+          return { ok: false, error: 'IDMM server offline. Buka aplikasi IDMM dulu.' };
         }
+        const cookies = await getTabCookies(message.downloadInfo?.url, sender.tab);
+        const sent = await sendToIDMM({
+          url: message.downloadInfo?.url,
+          filename: message.downloadInfo?.filename,
+          cookies: message.downloadInfo?.cookies || cookies,
+          referrer: message.downloadInfo?.referrer || sender.tab?.url || '',
+        });
+        return sent;
+      }
+
+      case 'NOTIFY_OFFLINE':
+        try {
+          chrome.notifications?.create({
+            type: 'basic',
+            iconUrl: 'icons/icon128.png',
+            title: 'IDMM',
+            message: message.message || 'IDMM server offline',
+          });
+        } catch { /* noop */ }
+        return { ok: true };
 
       case 'GET_SETTINGS':
         try {
           const settings = await IDMM_API.getSettings();
           return { ok: true, settings };
-        } catch (err) {
-          return { ok: false, error: err.message };
-        }
-
-      case 'SAVE_SETTINGS':
-        try {
-          await IDMM_API.saveSettings(message.settings);
-          return { ok: true };
         } catch (err) {
           return { ok: false, error: err.message };
         }
@@ -252,14 +238,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ ok: false, error: err.message });
   });
 
-  return true; // Keep channel open for async response
+  return true; // Jaga channel tetap terbuka untuk async
 });
 
 // ── Startup ──
 
 (async function init() {
   await checkServer();
-  // Re-check server health every 15 seconds
   setInterval(checkServer, 15000);
   console.log('[IDMM] Extension service worker started (relay mode)');
 })();

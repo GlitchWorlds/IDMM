@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSettings, updateSettings } from '../api';
 
+const THEME_OPTIONS = [
+  { value: 'dark', label: 'Dark', swatch: '#010102' },
+  { value: 'white', label: 'White', swatch: '#ffffff' },
+  { value: 'brown', label: 'Brown', swatch: '#f2f0eb' },
+  { value: 'pinky', label: 'Pinky', swatch: '#ff385c' },
+];
+
 export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, saveRef }) {
-  const [settings, setSettings] = useState({
-    threadMode: 'auto',
-    threads: 8,
-    savePath: '',
-  });
+  const [settings, setSettings] = useState({ savePath: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -19,9 +22,7 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
         if (s) {
           setSettings((prev) => ({
             ...prev,
-            threadMode: s.default_thread_mode ?? prev.threadMode,
-            threads: Number(s.default_threads ?? s.threads ?? prev.threads),
-            savePath: s.default_save_path ?? s.savePath ?? prev.savePath,
+            savePath: s.default_save_path ?? prev.savePath,
           }));
         }
       })
@@ -45,8 +46,6 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
     setSaved(false);
     try {
       const payload = {
-        default_thread_mode: settings.threadMode,
-        default_threads: String(settings.threads),
         default_save_path: settings.savePath || '',
       };
       await updateSettings(payload);
@@ -106,96 +105,61 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
       <div className="flex items-center gap-4 mb-8">
         <button
           onClick={onBack}
-          className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          className="p-2 rounded-lg text-muted hover:text-main hover:bg-surface transition-colors"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <h2 className="text-2xl font-bold text-slate-100">Settings</h2>
+        <h2 className="text-2xl font-bold text-main">Settings</h2>
       </div>
 
       <div className="space-y-6">
         {/* Theme Settings */}
-        <div className="bg-slate-800/50 rounded-xl p-5">
-          <label className="block text-sm font-medium text-slate-300 mb-2">Theme</label>
-          <p className="text-xs text-slate-500 mb-3">Select application color theme</p>
-          <select
-            value={theme}
-            onChange={(e) => handleThemeChange(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
-          >
-            <option value="dark">Dark Theme (Default)</option>
-            <option value="light">Light Theme</option>
-          </select>
+        <div className="surface rounded-xl p-5 border border-theme">
+          <label className="block text-sm font-medium text-main mb-2">Theme</label>
+          <p className="text-xs text-muted mb-3">Select application color theme</p>
+          <div className="grid grid-cols-4 gap-3">
+            {THEME_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => handleThemeChange(opt.value)}
+                className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
+                  theme === opt.value
+                    ? 'border-accent bg-accent/10 ring-2 ring-accent/30'
+                    : 'border-theme hover:border-accent/40'
+                }`}
+              >
+                <span
+                  className="w-8 h-8 rounded-full border border-theme"
+                  style={{ backgroundColor: opt.swatch }}
+                />
+                <span className={`text-xs ${theme === opt.value ? 'text-main font-medium' : 'text-muted'}`}>
+                  {opt.label}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Thread Mode */}
-        <div className="bg-slate-800/50 rounded-xl p-5">
-          <label className="block text-sm font-medium text-slate-300 mb-2">Thread Mode</label>
-          <p className="text-xs text-slate-500 mb-3">How download threads are determined</p>
-          <select
-            value={settings.threadMode}
-            onChange={(e) => updateSetting('threadMode', e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
-          >
-            <option value="auto">Auto (recommended)</option>
-            <option value="manual">Manual</option>
-          </select>
-        </div>
-
-        {/* Download Threads — only shown in Manual mode */}
-        {settings.threadMode === 'manual' ? (
-          <div className="bg-slate-800/50 rounded-xl p-5">
-            <label className="block text-sm font-medium text-slate-300 mb-2">Download Threads</label>
-            <p className="text-xs text-slate-500 mb-3">Number of parallel download connections (1–128)</p>
-            <div className="flex items-center gap-4">
-              <input
-                type="range"
-                min={1}
-                max={128}
-                value={settings.threads}
-                onChange={(e) => updateSetting('threads', Number(e.target.value))}
-                className="flex-1 accent-accent"
-              />
-              <span className="text-sm font-mono text-accent w-10 text-center">{settings.threads}</span>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-slate-800/50 rounded-xl p-5">
-            <label className="block text-sm font-medium text-slate-300 mb-2">Auto Thread Detection</label>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Thread count is chosen automatically based on file size:
-            </p>
-            <ul className="mt-2 text-xs text-slate-500 space-y-1">
-              <li>&lt; 5 MB &rarr; 1 thread</li>
-              <li>5–50 MB &rarr; 4 threads</li>
-              <li>50–500 MB &rarr; 16 threads</li>
-              <li>&gt; 500 MB &rarr; 32 threads</li>
-            </ul>
-            <p className="mt-2 text-xs text-slate-500">
-              Max 64 threads. Automatically reduces on server throttling.
-            </p>
-          </div>
-        )}
-
-        {/* Save Path */}
-        <div className="bg-slate-800/50 rounded-xl p-5">
-          <label className="block text-sm font-medium text-slate-300 mb-2">Save Path</label>
-          <p className="text-xs text-slate-500 mb-3">Default download directory</p>
+        {/* Save Folder Location */}
+        <div className="surface rounded-xl p-5 border border-theme">
+          <label className="block text-sm font-medium text-main mb-2">Save Folder Location</label>
+          <p className="text-xs text-muted mb-3">Default download directory</p>
           <div className="flex gap-2">
             <input
               type="text"
               value={settings.savePath}
               onChange={(e) => updateSetting('savePath', e.target.value)}
               placeholder="C:\Downloads"
-              className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
+              className="flex-1 base-bg border border-theme rounded-lg px-4 py-2.5 text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
             />
             <button
               type="button"
               onClick={handleSelectFolder}
               disabled={folderPickerOpen}
-              className="px-3 py-2.5 rounded-lg bg-slate-700 text-slate-300 text-sm hover:bg-slate-600 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2.5 rounded-lg surface border border-theme text-main text-sm hover:bg-surface-hover transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {folderPickerOpen ? '...' : 'Select Folder'}
             </button>
@@ -206,7 +170,7 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
         <div className="flex justify-end gap-3 pt-2">
           <button
             onClick={onBack}
-            className="px-4 py-2.5 rounded-lg text-sm text-slate-300 hover:bg-slate-800 transition-colors"
+            className="px-4 py-2.5 rounded-lg text-sm text-muted hover:bg-surface transition-colors"
           >
             Cancel
           </button>
