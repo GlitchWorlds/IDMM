@@ -56,15 +56,11 @@ export default function App() {
         });
       }
     } else if (msg.type === 'status') {
-      setDownloads((prev) => {
-        // Remove cancelled downloads from list (they're terminated)
-        if (msg.status === 'cancelled') {
-          return prev.filter((d) => d.id !== msg.id);
-        }
-        return prev.map((d) =>
+      setDownloads((prev) =>
+        prev.map((d) =>
           d.id === msg.id ? { ...d, status: msg.status } : d
-        );
-      });
+        )
+      );
     } else if (msg.type === 'added') {
       setDownloads((prev) => {
         // Prevent duplicate — check if already in list
