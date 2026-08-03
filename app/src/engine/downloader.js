@@ -123,23 +123,19 @@ class DownloadManager {
 
     if (!url) throw new Error('URL is required');
 
-    // Resolve thread mode: param > settings > default "auto"
-    const threadMode = (requestedThreadMode || this.settings.default_thread_mode || 'auto').toLowerCase();
+    // Thread mode: always auto-detection (user-facing thread settings removed).
+    // Per-request manual override still honored for API callers.
+    const threadMode = (requestedThreadMode || 'auto').toLowerCase();
 
     // Resolve settings (coerce to numbers — DB stores everything as strings)
-    const defaultThreads = parseInt(this.settings.default_threads, 10) || 8;
-    let threads;
+    let threads = null; // Auto mode: set after HEAD probe returns contentLength
     if (threadMode === 'manual') {
-      // Manual mode: use requested or default, capped at max_threads_per_download (128)
+      // Manual override: use requested or 4, capped at max_threads_per_download (128)
       const maxManualThreads = parseInt(this.settings.max_threads_per_download, 10) || 128;
       threads = Math.min(
-        Math.max(requestedThreads || defaultThreads, 1),
+        Math.max(requestedThreads || 4, 1),
         maxManualThreads
       );
-    } else {
-      // Auto mode: will be determined after probe (size-based heuristic)
-      // Placeholder — actual value set after HEAD probe returns contentLength
-      threads = null;
     }
     const savePath = saveTo || this.settings.default_save_path || path.join(require('node:os').homedir(), 'Downloads', 'IDMM');
     const retryCount = parseInt(this.settings.retry_count, 10) || 3;
@@ -204,6 +200,26 @@ class DownloadManager {
     // Fix #1: Use DownloadQueue
     const priority = (requestedPriority in Priority) ? requestedPriority : Priority.NORMAL;
     this.queue.add(downloadId, priority);
+
+    // Queue gate: if no free slot under max_concurrent, park as 'queued'
+    // and let _processQueue() pick it up when a slot frees.
+    const maxConcurrent = parseInt(this.settings.max_concurrent_downloads, 10) || 5;
+    const slotFree = this.active.size < maxConcurrent;
+    if (!slotFree) {
+      this.db.updateDownload(downloadId, { status: 'queued' });
+      return {
+        id: downloadId,
+        status: 'queued',
+        filename: finalFilename,
+        total_size: download.totalSize,
+        threads: download.threads,
+        thread_mode: threadMode,
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    // Slot free — remove from queue; download starts now (not via _processQueue)
+    this._dequeue(downloadId);
 
     // Step 4: Set up temp directory for chunks
     const downloadTempDir = this.resume.getDownloadTempDir(downloadId);
@@ -408,7 +424,10 @@ class DownloadManager {
     if (state.cookies) requestHeaders['Cookie'] = state.cookies;
     if (state.referrer) requestHeaders['Referer'] = state.referrer;
 
-    if (state.chunks.length > 1) {
+    if (state.chunks.length === 0) {
+      // Never-started (queued) download — run full start path from stored record
+      await this._startQueuedFromScratch(state, { retryCount, timeoutMs, requestHeaders });
+    } else if (state.chunks.length > 1) {
       await this._resumeChunkedDownload(state, {
         retryCount,
         timeoutMs,
@@ -424,6 +443,41 @@ class DownloadManager {
     }
 
     return { id: downloadId, status: 'downloading' };
+  }
+
+  /**
+   * Start a queued (never-started) download from its stored DB record.
+   * Probes the URL, resolves thread count, creates chunks, spawns workers.
+   * @private
+   */
+  async _startQueuedFromScratch(state, opts) {
+    const { url, headers } = state;
+    const requestHeaders = { ...(headers || {}) };
+    if (state.cookies) requestHeaders['Cookie'] = state.cookies;
+    if (state.referrer) requestHeaders['Referer'] = state.referrer;
+
+    // Probe URL for size + Range support
+    const probe = await this._probeUrl(url, requestHeaders);
+    state.totalSize = probe.contentLength || 0;
+
+    // Resolve thread count (auto heuristic — user-facing thread mode is removed)
+    let finalThreads;
+    if (!probe.acceptsRanges || state.totalSize === 0) {
+      finalThreads = 1;
+    } else {
+      finalThreads = this._autoDetectThreads(state.totalSize);
+    }
+    state.threads = finalThreads;
+    this.db.updateDownload(state.id, { threads: finalThreads });
+
+    if (probe.acceptsRanges && state.totalSize > 0) {
+      await this._startChunkedDownload(state, opts);
+    } else {
+      state.noRangeSupport = true;
+      state.threads = 1;
+      this.db.updateDownload(state.id, { threads: 1 });
+      await this._startSingleStreamDownload(state, opts);
+    }
   }
 
   /**
@@ -705,7 +759,9 @@ class DownloadManager {
 
         // Check Range support
         const acceptRanges = (res.headers['accept-ranges'] || '').toLowerCase();
-        if (acceptRanges === 'bytes') {
+        // Some servers return comma-separated values, e.g. "bytes, bytes"
+        const rangeTokens = acceptRanges.split(',').map(t => t.trim());
+        if (rangeTokens.includes('bytes')) {
           result.acceptsRanges = true;
         }
 
@@ -775,10 +831,13 @@ class DownloadManager {
 
   /**
    * Spawn worker threads for each pending/incomplete chunk.
+   * Staggered: workers open one-by-one (small delay between spawns)
+   * so servers that rate-limit parallel connections get a grace period.
    */
   async _spawnWorkers(state, opts) {
     // Gap 5: Sort chunks by priority (this download's queue position)
     const pendingChunks = state.chunks.filter(c => c.status !== 'done' && c.status !== 'completed');
+    const staggerMs = parseInt(this.settings.thread_stagger_ms, 10) || 400; // 400ms between worker spawns
 
     for (const chunk of pendingChunks) {
       const chunkPath = this.resume.getChunkPath(state.id, chunk.index);
@@ -802,6 +861,11 @@ class DownloadManager {
 
       chunk.status = 'downloading';
       this._spawnWorkerAsync(state, chunk, chunkPath, opts); // F11: async with global semaphore
+
+      // Stagger: wait between spawns so connections open one-by-one
+      if (staggerMs > 0 && pendingChunks.length > 1) {
+        await new Promise(r => setTimeout(r, staggerMs));
+      }
     }
 
     // Check if all chunks are already done (resume edge case)
@@ -998,7 +1062,7 @@ class DownloadManager {
 
       case 'throttle':
         // Server is rate-limiting or connection reset — reduce threads
-        this._handleThrottle(state);
+        this._handleThrottle(state, msg.retryAfter || 0);
         break;
 
       case 'retry':
@@ -1014,9 +1078,11 @@ class DownloadManager {
   /**
    * Handle throttle event (429 / ECONNRESET) from a worker.
    * Strategy: reduce active threads by half; after 3+ consecutive throttles, cap at 4.
+   * Honors Retry-After header when present.
    * @param {Object} state - Download state
+   * @param {number} [retryAfterSec] - Retry-After seconds from server
    */
-  _handleThrottle(state) {
+  _handleThrottle(state, retryAfterSec = 0) {
     state._throttleCount = (state._throttleCount || 0) + 1;
     debugLog(`[IDMM] Throttle #${state._throttleCount} for download ${state.id}`);
 
@@ -1048,12 +1114,14 @@ class DownloadManager {
       // Respawn workers for orphaned chunks after throttle period
       const currentState = this.active.get(state.id);
       if (currentState) {
+        // Honor Retry-After if the server told us to wait
+        const delayMs = retryAfterSec > 0 ? Math.min(retryAfterSec * 1000, 30000) : 5000;
         setTimeout(() => {
           const refreshedState = this.active.get(state.id);
           if (refreshedState && refreshedState.status === 'downloading') {
             this._spawnWorkers(refreshedState).catch(err => console.error('[Throttle respawn]', err.message));
           }
-        }, 5000); // Resume after 5s
+        }, delayMs); // Resume after delay
       }
     }
   }
@@ -1224,7 +1292,11 @@ class DownloadManager {
 
       this.resume.saveState(state);
 
-      this._doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject);
+      // Fire-and-forget: resolve once the request is set up.
+      // Completion/failure is handled by _finalizeDownload / _checkCompletion
+      // via onComplete/onError callbacks.
+      this._doSingleStream(state, opts, chunkPath, existingBytes, () => {}, reject);
+      resolve();
     });
   }
 
@@ -1335,7 +1407,9 @@ class DownloadManager {
       const existingBytes = state.chunks[0]?.downloaded || 0;
 
       state.chunks[0].status = 'downloading';
-      this._doSingleStream(state, opts, chunkPath, existingBytes, resolve, reject);
+      // Fire-and-forget: completion/failure handled via callbacks
+      this._doSingleStream(state, opts, chunkPath, existingBytes, () => {}, reject);
+      resolve();
     });
   }
 

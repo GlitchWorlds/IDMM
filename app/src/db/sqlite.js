@@ -189,8 +189,7 @@ class IDMMDatabase {
 
   _initSettings() {
     const defaults = {
-      default_threads: '8',
-      default_thread_mode: 'auto',
+      // Thread settings removed — engine auto-detects threads internally
       max_concurrent_downloads: '5',
       max_threads_per_download: '128',
       default_save_path: path.join(require('node:os').homedir(), 'Downloads', 'IDMM'),
@@ -215,6 +214,9 @@ class IDMMDatabase {
         [key, value]
       );
     }
+
+    // Remove stale thread settings from older DBs (engine auto-detects now)
+    this.db.run("DELETE FROM settings WHERE key IN ('default_threads', 'default_thread_mode')");
   }
 
   _safeError(err) {
@@ -266,16 +268,28 @@ class IDMMDatabase {
     }
   }
 
-  listDownloads(status) {
+  listDownloads(status, sort = 'date', dir = 'desc') {
     try {
+      // Whitelist sort columns to prevent SQL injection via query param
+      const sortColumns = {
+        name: 'filename',
+        date: 'created_at',
+        type: 'mime_type',
+        size: 'total_size',
+      };
+      const sortCol = sortColumns[sort] || sortColumns.date;
+      const order = dir.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+      // Secondary sort for stable ordering
+      const orderSql = `ORDER BY ${sortCol} ${order}, created_at DESC`;
+
       let rows;
       if (status) {
         rows = this._query(
-          "SELECT * FROM downloads WHERE status = ? ORDER BY created_at DESC",
+          `SELECT * FROM downloads WHERE status = ? ${orderSql}`,
           [status]
         );
       } else {
-        rows = this._query('SELECT * FROM downloads ORDER BY created_at DESC');
+        rows = this._query(`SELECT * FROM downloads ${orderSql}`);
       }
       rows = rows.map(row => {
         row.headers = row.headers ? JSON.parse(row.headers) : null;

@@ -246,14 +246,9 @@ class IDMMServer {
           return res.status(409).json({ error: 'URL is already being downloaded' });
         }
 
-        // Check concurrent download limit
-        const maxSetting = this.db.getSetting('max_concurrent_downloads');
-        const maxConcurrent = (maxSetting.ok && maxSetting.data) ? parseInt(maxSetting.data, 10) : 5;
-        if (this.downloader.getActiveCount() >= maxConcurrent) {
-          return res.status(429).json({
-            error: `Maximum concurrent downloads reached (${maxConcurrent})`,
-          });
-        }
+        // Check concurrent download limit — if reached, download enters the
+        // priority queue (status 'queued') and auto-starts when a slot frees.
+        // (No 429 rejection: queueing is the desired behavior.)
 
         // F10: Track active URL BEFORE startDownload to prevent race condition
         this.activeUrls.add(url);
@@ -288,7 +283,9 @@ class IDMMServer {
     this.app.get('/api/downloads', (req, res) => {
       try {
         const { status } = req.query;
-        const result = this.db.listDownloads(status);
+        const sort = req.query.sort || 'date';
+        const dir = (req.query.dir || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+        const result = this.db.listDownloads(status, sort, dir);
         if (!result.ok) {
           return res.status(500).json({ error: result.error || 'Failed to list downloads' });
         }
@@ -411,9 +408,9 @@ class IDMMServer {
           return res.status(400).json({ error: 'Settings object required' });
         }
 
-        // Whitelist allowed settings keys
+        // Whitelist allowed settings keys (thread settings removed — engine auto-detects)
         const allowedKeys = [
-          'default_threads', 'default_thread_mode', 'max_concurrent_downloads', 'max_threads_per_download',
+          'max_concurrent_downloads', 'max_threads_per_download',
           'default_save_path', 'temp_dir', 'retry_count', 'timeout_ms',
           'speed_limit_global', 'auto_resume', 'auto_categorize', 'intercept_all',
           // Extension sync: intercept rules
@@ -459,9 +456,21 @@ class IDMMServer {
         const { execFile } = require('node:child_process');
         const fs = require('node:fs');
 
-        // Determine if path is a file or directory
+        // Check whether the target exists before opening
+        let exists = false;
         let isDir = false;
-        try { isDir = fs.statSync(filePath).isDirectory(); } catch { /* assume file */ }
+        try {
+          const stat = fs.statSync(filePath);
+          exists = true;
+          isDir = stat.isDirectory();
+        } catch {
+          exists = false;
+        }
+
+        // If the file is missing, don't open explorer — UI shows a modal instead
+        if (!exists) {
+          return res.json({ ok: true, exists: false, path: filePath });
+        }
 
         const platform = process.platform;
         if (platform === 'win32') {
@@ -477,7 +486,7 @@ class IDMMServer {
           execFile('xdg-open', [dir]);
         }
 
-        res.json({ ok: true });
+        res.json({ ok: true, exists: true, path: filePath });
       } catch (err) {
         res.status(500).json({ error: 'Failed to open folder' });
       }
