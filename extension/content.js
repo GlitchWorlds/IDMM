@@ -1,15 +1,13 @@
 /**
- * IDMM Content Script — Floating Download Button + Click Interception.
+ * IDMM Content Script — Inline Download Buttons + Click Interception.
  *
- * Perilaku (sesuai permintaan):
+ * Perilaku:
  * 1. Klik link download di halaman di-INTERCEPT — browser TIDAK mulai download,
  *    URL langsung dikirim ke IDMM desktop app.
- * 2. TIDAK ada tombol kecil di samping tiap link. Gantinya: SATU floating button
- *    "IDMM" di pojok kanan bawah, dengan tombol X untuk menutupnya.
- * 3. Kalau software IDMM tidak aktif (server offline) → floating button
+ * 2. Setiap link download terdeteksi → tombol kecil "IDMM" inline di samping link,
+ *    dengan tombol X untuk menutup tombol itu (diingat per tab, tidak muncul lagi).
+ * 3. Kalau software IDMM tidak aktif (server offline) → SEMUA tombol
  *    DISEMBUNYIKAN otomatis. Muncul lagi begitu server online.
- * 4. Klik floating button → panel daftar link download yang terdeteksi di halaman,
- *    tiap item bisa dikirim ke IDMM (atau "Kirim Semua").
  */
 
 (() => {
@@ -37,19 +35,13 @@
     '.ttf', '.otf', '.woff', '.woff2',
   ]);
 
-  const FAB_CLOSED_KEY = 'idmm_fab_closed';
+  const HIDDEN_KEY = 'idmm_hidden_links'; // URL yang tombolnya ditutup user (per tab)
   const POLL_MS = 4000;
-  const MAX_LIST = 50;
 
   // ── State ──
 
-  let online = false;          // server IDMM aktif?
-  let closed = false;          // user menutup FAB (persist per tab via sessionStorage)
-  let links = [];              // daftar link download terdeteksi { url, name }
-  let host = null;             // root element FAB
-  let shadow = null;           // shadow root (isolasi dari CSS halaman)
-  let panelOpen = false;
-  let el = {};                 // refs elemen UI
+  let online = false;
+  let hiddenLinks = new Set();
 
   // ── Detection ──
 
@@ -77,32 +69,19 @@
     return url;
   }
 
-  function fileNameFromUrl(url, a) {
-    const dl = a && a.getAttribute('download');
-    if (dl) return dl;
+  // ── Hidden links (persist per tab) ──
+
+  function loadHidden() {
     try {
-      const u = new URL(url);
-      const last = decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || '');
-      return last || u.hostname;
-    } catch {
-      return url;
-    }
+      const raw = sessionStorage.getItem(HIDDEN_KEY);
+      if (raw) hiddenLinks = new Set(JSON.parse(raw));
+    } catch { /* noop */ }
   }
 
-  function collectLinks() {
-    const seen = new Set();
-    const out = [];
-    const anchors = document.querySelectorAll('a[href]');
-    for (const a of anchors) {
-      const url = resolveDownloadUrl(a);
-      if (!url || seen.has(url)) continue;
-      if (isDownloadable(url) || a.hasAttribute('download')) {
-        seen.add(url);
-        out.push({ url, name: fileNameFromUrl(url, a) });
-      }
-    }
-    links = out;
-    return out;
+  function persistHidden() {
+    try {
+      sessionStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenLinks]));
+    } catch { /* noop */ }
   }
 
   // ── Kirim URL ke IDMM (via background) ──
@@ -145,7 +124,6 @@
     const hasDownloadAttr = a.hasAttribute('download');
     if (!isFileLink && !hasDownloadAttr) return;
 
-    // Jangan intercept kalau klik pakai modifier (save-as / new tab)
     if (e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
 
     e.preventDefault();
@@ -157,14 +135,13 @@
       flash(a, '#22c55e');
     } else {
       flash(a, '#ef4444');
-      if (!online) {
-        setFabVisible(false);
+      if (String(res.error || '').toLowerCase().includes('offline') || !res.ok && !online) {
+        setOnline(false);
         notifyOffline();
       }
     }
   }
 
-  // Feedback non-destruktif: outline saja, tidak menyentuh isi link
   function flash(a, color) {
     a.style.transition = 'outline 0.15s ease';
     a.style.outline = `2px solid ${color}`;
@@ -175,220 +152,181 @@
     }, 1500);
   }
 
-  // ── UI: Floating Button + Panel (Shadow DOM) ──
+  // ── Inline Button (di samping tiap link) ──
 
-  const FAB_CSS = `
-    * { box-sizing: border-box; }
-    #wrap { position: relative; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    .fab {
-      display: flex; align-items: center; gap: 6px;
-      background: #5e6ad2; color: #fff; border: none; border-radius: 999px;
-      padding: 9px 12px; cursor: pointer;
-      box-shadow: 0 3px 14px rgba(0,0,0,.35);
-      font-size: 12px; font-weight: 600; line-height: 1; user-select: none;
-      transition: background .15s, transform .1s;
-    }
-    .fab:hover { background: #4b56b8; }
-    .fab:active { transform: scale(.97); }
-    .fab .count {
-      background: rgba(255,255,255,.22); border-radius: 999px;
-      padding: 2px 6px; font-size: 10px; font-weight: 700;
-    }
-    .fab .x {
-      display: flex; align-items: center; justify-content: center;
-      width: 18px; height: 18px; border-radius: 50%;
-      background: rgba(0,0,0,.22); color: #fff;
-      font-size: 11px; font-weight: 700; line-height: 1; margin-left: 2px;
-    }
-    .fab .x:hover { background: rgba(0,0,0,.4); }
-    .panel {
-      position: absolute; bottom: calc(100% + 10px); right: 0;
-      width: 300px; max-width: min(360px, calc(100vw - 32px));
-      background: #fff; color: #1f1f1f; border-radius: 14px;
-      box-shadow: 0 10px 40px rgba(0,0,0,.3);
-      overflow: hidden; display: none; flex-direction: column; font-size: 12px;
-    }
-    .panel.open { display: flex; }
-    .panel-head {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 12px; background: #f5f5f7; border-bottom: 1px solid #e4e4e4;
-      font-weight: 700; font-size: 12px;
-    }
-    .panel-head .sp { flex: 1; }
-    .panel-head .send-all {
-      font-size: 11px; font-weight: 600; background: #5e6ad2; color: #fff;
-      border: none; border-radius: 6px; padding: 4px 8px; cursor: pointer;
-    }
-    .panel-head .send-all:hover { background: #4b56b8; }
-    .panel-head .p-x {
-      font-size: 13px; color: #888; background: none; border: none;
-      cursor: pointer; padding: 2px 6px; border-radius: 6px; line-height: 1;
-    }
-    .panel-head .p-x:hover { background: #e4e4e4; color: #333; }
-    .list { overflow-y: auto; max-height: 280px; }
-    .item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 9px 12px; border-bottom: 1px solid #f0f0f0;
-    }
-    .item:hover { background: #f8f8fa; }
-    .item .name {
-      flex: 1; min-width: 0; color: #333; cursor: pointer;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .item .name:hover { color: #5e6ad2; }
-    .item .go {
-      flex-shrink: 0; font-size: 11px; font-weight: 700;
-      background: #5e6ad2; color: #fff; border: none; border-radius: 6px;
-      padding: 5px 9px; cursor: pointer;
-    }
-    .item .go:hover { background: #4b56b8; }
-    .item.ok .go { background: #22c55e; }
-    .item.fail .go { background: #ef4444; }
-    .empty { padding: 20px 12px; text-align: center; color: #999; }
-    @media (prefers-color-scheme: dark) {
-      .panel { background: #1c1c1e; color: #f2f2f7; }
-      .panel-head { background: #2c2c2e; border-bottom-color: #3a3a3c; }
-      .item { border-bottom-color: #2c2c2e; }
-      .item:hover { background: #2c2c2e; }
-      .item .name { color: #f2f2f7; }
-      .panel-head .p-x:hover { background: #3a3a3c; color: #f2f2f7; }
-      .empty { color: #888; }
-    }
-  `;
+  const BTN_HTML =
+    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+    '<span style="font-size:10px;font-weight:700;letter-spacing:.2px">IDMM</span>' +
+    '<span class="idmm-x" title="Tutup tombol">✕</span>';
 
-  function buildUI() {
-    if (host) return;
-    host = document.createElement('div');
-    host.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;';
-    shadow = host.attachShadow({ mode: 'closed' });
-    shadow.innerHTML = `<style>${FAB_CSS}</style>
-      <div id="wrap">
-        <div class="panel" id="panel">
-          <div class="panel-head">
-            <span>IDMM Download</span><span class="sp"></span>
-            <button class="send-all" id="sendAll" title="Kirim semua link ke IDMM">Kirim Semua</button>
-            <button class="p-x" id="pX" title="Tutup panel">✕</button>
-          </div>
-          <div class="list" id="list"></div>
-        </div>
-        <button class="fab" id="fab" title="Download dengan IDMM">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          <span>IDMM</span>
-          <span class="count" id="count" style="display:none"></span>
-          <span class="x" id="x" title="Tutup tombol">✕</span>
-        </button>
-      </div>`;
-    document.documentElement.appendChild(host);
+  function injectButton(a, url) {
+    if (a.dataset.idmmProcessed) return;
+    a.dataset.idmmProcessed = '1'; // jangan proses dua kali
 
-    el = {
-      fab: shadow.getElementById('fab'),
-      panel: shadow.getElementById('panel'),
-      list: shadow.getElementById('list'),
-      count: shadow.getElementById('count'),
-      sendAll: shadow.getElementById('sendAll'),
-    };
+    if (hiddenLinks.has(url)) return; // user menutup tombol untuk link ini
 
-    el.fab.addEventListener('click', (e) => {
-      if (e.target.closest && e.target.closest('#x')) {
-        closeFab();
+    const btn = document.createElement('div');
+    btn.className = 'idmm-dl-btn';
+    btn.title = 'Download dengan IDMM';
+    btn.innerHTML = BTN_HTML;
+
+    Object.assign(btn.style, {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      padding: '3px 8px',
+      marginLeft: '6px',
+      borderRadius: '999px',
+      background: '#5e6ad2',
+      color: '#fff',
+      cursor: 'pointer',
+      fontSize: '0',
+      lineHeight: '1',
+      border: 'none',
+      verticalAlign: 'middle',
+      transition: 'background 0.15s',
+      userSelect: 'none',
+      position: 'relative',
+      zIndex: '2147483647',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+    });
+
+    const x = btn.querySelector('.idmm-x');
+    Object.assign(x.style, {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '13px',
+      height: '13px',
+      borderRadius: '50%',
+      background: 'rgba(0,0,0,0.25)',
+      color: '#fff',
+      fontSize: '8px',
+      fontWeight: '700',
+      lineHeight: '1',
+      marginLeft: '2px',
+    });
+    x.addEventListener('mouseenter', () => (x.style.background = 'rgba(0,0,0,0.5)'));
+    x.addEventListener('mouseleave', () => (x.style.background = 'rgba(0,0,0,0.25)'));
+
+    btn.addEventListener('mouseenter', () => (btn.style.background = '#4b56b8'));
+    btn.addEventListener('mouseleave', () => (btn.style.background = '#5e6ad2'));
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Klik tombol X → tutup tombol ini (permanen per tab)
+      if (e.target.closest('.idmm-x')) {
+        btn.remove();
+        hiddenLinks.add(url);
+        persistHidden();
         return;
       }
-      togglePanel();
-    });
-    shadow.getElementById('pX').addEventListener('click', closePanel);
-    el.sendAll.addEventListener('click', sendAll);
-  }
 
-  function setFabVisible(v) {
-    if (!host) return;
-    host.style.display = v && !closed ? 'block' : 'none';
-    if (!v) closePanel();
-  }
-
-  function closePanel() {
-    panelOpen = false;
-    if (el.panel) el.panel.classList.remove('open');
-  }
-
-  function togglePanel() {
-    panelOpen = !panelOpen;
-    if (el.panel) el.panel.classList.toggle('open', panelOpen);
-    if (panelOpen) renderList();
-  }
-
-  function closeFab() {
-    closed = true;
-    try { sessionStorage.setItem(FAB_CLOSED_KEY, '1'); } catch { /* noop */ }
-    if (host) { host.remove(); host = null; shadow = null; el = {}; }
-  }
-
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[c]));
-  }
-
-  function renderList() {
-    if (!el.list) return;
-    el.list.innerHTML = '';
-
-    if (links.length === 0) {
-      el.list.innerHTML = '<div class="empty">Tidak ada link download terdeteksi di halaman ini</div>';
-      el.count.style.display = 'none';
-      el.count.textContent = '';
-      return;
-    }
-
-    const items = links.slice(0, MAX_LIST);
-    items.forEach((l, i) => {
-      const row = document.createElement('div');
-      row.className = 'item';
-      row.dataset.idx = String(i);
-      row.innerHTML =
-        `<span class="name" title="${escapeHtml(l.url)}">${escapeHtml(l.name || l.url)}</span>` +
-        `<button class="go" title="Kirim ke IDMM">⬇</button>`;
-      row.querySelector('.name').addEventListener('click', () => sendItem(row, l));
-      row.querySelector('.go').addEventListener('click', () => sendItem(row, l));
-      el.list.appendChild(row);
+      // Klik utama → kirim ke IDMM
+      sendToIDMM(url, btn);
     });
 
-    if (links.length > MAX_LIST) {
-      const more = document.createElement('div');
-      more.className = 'empty';
-      more.textContent = `+${links.length - MAX_LIST} link lainnya`;
-      el.list.appendChild(more);
-    }
-
-    el.count.textContent = String(links.length);
-    el.count.style.display = '';
-  }
-
-  async function sendItem(row, l) {
-    row.classList.remove('ok', 'fail');
-    const go = row.querySelector('.go');
-    go.textContent = '…';
-    const res = await sendUrl(l.url);
-    if (res.ok) {
-      row.classList.add('ok');
-      go.textContent = '✓';
+    if (a.nextSibling) {
+      a.parentNode.insertBefore(btn, a.nextSibling);
     } else {
-      row.classList.add('fail');
-      go.textContent = '✗';
-      if (!online) setFabVisible(false);
-    }
-    setTimeout(() => { go.textContent = '⬇'; }, 1500);
-  }
-
-  async function sendAll() {
-    if (!el.list) return;
-    const rows = [...el.list.querySelectorAll('.item')];
-    for (let i = 0; i < rows.length; i++) {
-      const l = links[Number(rows[i].dataset.idx)];
-      if (l) await sendItem(rows[i], l);
+      a.parentNode.appendChild(btn);
     }
   }
 
-  // ── Status polling: sembunyikan FAB kalau IDMM offline ──
+  function setBtnState(btn, state) {
+    if (!btn || !btn.isConnected) return;
+    const svg = btn.querySelector('svg');
+    const label = btn.querySelector('span');
+    if (state === 'loading') {
+      btn.style.background = '#f59e0b';
+      if (label) label.textContent = '…';
+      btn.style.pointerEvents = 'none';
+    } else if (state === 'ok') {
+      btn.style.background = '#22c55e';
+      if (label) label.textContent = '✓';
+      btn.style.pointerEvents = '';
+      setTimeout(() => restoreBtn(btn, svg), 1500);
+    } else {
+      btn.style.background = '#ef4444';
+      if (label) label.textContent = '✗';
+      btn.style.pointerEvents = '';
+      setTimeout(() => restoreBtn(btn, svg), 1500);
+    }
+  }
+
+  function restoreBtn(btn, svg) {
+    if (!btn || !btn.isConnected) return;
+    btn.style.background = '#5e6ad2';
+    btn.style.pointerEvents = '';
+    btn.innerHTML = BTN_HTML;
+    // re-wire X handler (innerHTML mengganti node)
+    const x = btn.querySelector('.idmm-x');
+    if (x) {
+      Object.assign(x.style, {
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: '13px', height: '13px', borderRadius: '50%',
+        background: 'rgba(0,0,0,0.25)', color: '#fff', fontSize: '8px',
+        fontWeight: '700', lineHeight: '1', marginLeft: '2px',
+      });
+      x.addEventListener('mouseenter', () => (x.style.background = 'rgba(0,0,0,0.5)'));
+      x.addEventListener('mouseleave', () => (x.style.background = 'rgba(0,0,0,0.25)'));
+    }
+  }
+
+  async function sendToIDMM(url, btn) {
+    setBtnState(btn, 'loading');
+    const res = await sendUrl(url);
+    if (res.ok) {
+      setBtnState(btn, 'ok');
+    } else {
+      setBtnState(btn, 'fail');
+      if (!online) {
+        setOnline(false);
+        notifyOffline();
+      }
+    }
+  }
+
+  // ── Sembunyikan/tampilkan semua tombol berdasarkan status server ──
+
+  function removeAllButtons() {
+    document.querySelectorAll('.idmm-dl-btn').forEach((b) => b.remove());
+  }
+
+  function setOnline(v) {
+    if (online === v) return;
+    online = v;
+    if (!online) {
+      removeAllButtons();
+    } else {
+      scanPage();
+    }
+  }
+
+  // ── Scan halaman ──
+
+  let scanTimer = null;
+
+  function scanPage() {
+    if (scanTimer) return;
+    scanTimer = setTimeout(() => {
+      scanTimer = null;
+      if (!online) return; // offline — jangan pasang tombol baru
+      const anchors = document.querySelectorAll('a[href]');
+      for (const a of anchors) {
+        if (a.dataset.idmmProcessed) continue;
+        const url = resolveDownloadUrl(a);
+        if (!url) continue;
+        if (isDownloadable(url) || a.hasAttribute('download')) {
+          injectButton(a, url);
+        }
+      }
+    }, 400);
+  }
+
+  // ── Status polling ──
 
   async function pollStatus() {
     let res = null;
@@ -400,41 +338,43 @@
         });
       });
     } catch { res = null; }
-    online = !!(res && res.online);
-    setFabVisible(online);
+    setOnline(!!(res && res.online));
   }
 
-  // ── Scan halaman (perbarui daftar link) ──
+  // ── Styles ──
 
-  let scanTimer = null;
-
-  function scheduleScan() {
-    if (scanTimer) return;
-    scanTimer = setTimeout(() => {
-      scanTimer = null;
-      collectLinks();
-      if (panelOpen) renderList();
-    }, 500);
+  function injectStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+      .idmm-dl-btn { animation: idmmFadeIn 0.2s ease-out; }
+      @keyframes idmmFadeIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+    `;
+    document.head.appendChild(style);
   }
 
   // ── Init ──
 
   function init() {
-    try {
-      closed = sessionStorage.getItem(FAB_CLOSED_KEY) === '1';
-    } catch { closed = false; }
+    loadHidden();
 
-    // Interception klik tetap aktif walau FAB di-close
+    // Interception klik tetap aktif walau semua tombol ditutup
     document.addEventListener('click', handleClick, true);
 
-    if (closed) return; // FAB sudah ditutup user di tab ini
-
-    buildUI();
-    pollStatus();
-    setInterval(pollStatus, POLL_MS);
-
-    collectLinks();
-    new MutationObserver(scheduleScan).observe(document.body, { childList: true, subtree: true });
+    if (document.body) {
+      injectStyles();
+      pollStatus();
+      setInterval(pollStatus, POLL_MS);
+      scanPage();
+      new MutationObserver(scanPage).observe(document.body, { childList: true, subtree: true });
+    } else {
+      document.addEventListener('DOMContentLoaded', () => {
+        injectStyles();
+        pollStatus();
+        setInterval(pollStatus, POLL_MS);
+        scanPage();
+        new MutationObserver(scanPage).observe(document.body, { childList: true, subtree: true });
+      });
+    }
   }
 
   init();
