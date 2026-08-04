@@ -76,6 +76,7 @@ async function getTabCookies(url, tab) {
 const interceptedIds = new Set();
 
 chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
+  // Guard: jangan intercept download yang kita cancel sendiri
   if (interceptedIds.has(item.id)) {
     interceptedIds.delete(item.id);
     suggest();
@@ -94,6 +95,7 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
     return;
   }
 
+  // Kirim ke IDMM dulu
   const sent = await sendToIDMM({
     url: item.finalUrl || item.url,
     filename: item.filename,
@@ -103,12 +105,17 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
 
   if (sent.ok) {
     interceptedIds.add(item.id);
-    suggest(); // Buka pipeline Chrome dulu, lalu batalkan — IDMM yang handle
+    // Cancel SEJAK DINI — sebelum Chrome mulai nulis file.
+    // Ini mencegah download ganda untuk file kecil yang bisa selesai < 1 detik.
+    try {
+      chrome.downloads.cancel(item.id, () => {});
+    } catch { /* item mungkin sudah selesai — biarkan */ }
+    // Beri nama unik kalau cancel kebablasan (file sudah keburu selesai),
+    // supaya file IDMM dan file browser tidak menimpa satu sama lain.
+    suggest({ filename: `__idmm_${item.id}_${item.filename}` });
     setTimeout(() => {
-      chrome.downloads.cancel(item.id, () => {
-        chrome.downloads.erase({ id: item.id }, () => {});
-      });
-    }, 100);
+      chrome.downloads.erase({ id: item.id }, () => {});
+    }, 2000);
   } else {
     suggest(); // Gagal kirim — biarkan browser download normal
   }

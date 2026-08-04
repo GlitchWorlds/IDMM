@@ -24,15 +24,29 @@ export default function App() {
   const [detailDl, setDetailDl] = useState(null);
   const [missingDl, setMissingDl] = useState(null);
   const [copied, setCopied] = useState(false);
-  // Theming state
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('idmm_theme') || 'dark';
-  });
-  const themeOnEnterRef = useRef(theme);
+  // Theming state — sumber utama: theme.json (main process, dibaca via preload)
+  // supaya titleBarOverlay (tombol min/max/close) ikut berganti warna.
+  const [theme, setTheme] = useState('dark');
+  const themeOnEnterRef = useRef('dark');
 
   useEffect(() => {
-    localStorage.setItem('idmm_theme', theme);
+    (async () => {
+      try {
+        const saved = window.idmm?.getTheme ? await window.idmm.getTheme() : null;
+        if (saved) setTheme(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    try {
+      window.idmm?.setTheme?.(theme);
+    } catch (e) {
+      console.error(e);
+    }
   }, [theme]);
 
   const handleOpenSettings = useCallback(() => {

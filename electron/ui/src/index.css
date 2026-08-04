@@ -18,6 +18,25 @@
   --color-accent-glow: var(--accent-glow);
 }
 
+/* Fallback default (sebelum JS set data-theme) — harus PALING ATAS,
+   kalau di bawah, :root menimpa [data-theme=...] karena specificity sama. */
+:root {
+  --bg-base: #010102;
+  --bg-surface: #0e0e12;
+  --bg-surface-hover: rgba(30, 30, 40, 0.8);
+  --text-main: #f8fafc;
+  --text-muted: #8b8b96;
+  --accent: #5e6ad2;
+  --accent-dim: #4b56b8;
+  --accent-glow: rgba(94, 106, 210, 0.25);
+  --border-color: #232329;
+  --progress-gradient: linear-gradient(90deg, #5e6ad2, #8b93e8);
+  --status-completed: #34d399;
+  --status-paused: #fbbf24;
+  --status-error: #f87171;
+  --status-cancelled: #8b8b96;
+}
+
 /* ── Dark — design-linear.app.md (canvas #010102, primary #5e6ad2) ── */
 [data-theme="dark"] {
   --bg-base: #010102;
@@ -90,23 +109,7 @@
   --status-cancelled: #717171;
 }
 
-:root,
-[data-theme="dark"] {
-  --bg-base: #010102;
-  --bg-surface: #0e0e12;
-  --bg-surface-hover: rgba(30, 30, 40, 0.8);
-  --text-main: #f8fafc;
-  --text-muted: #8b8b96;
-  --accent: #5e6ad2;
-  --accent-dim: #4b56b8;
-  --accent-glow: rgba(94, 106, 210, 0.25);
-  --border-color: #232329;
-  --progress-gradient: linear-gradient(90deg, #5e6ad2, #8b93e8);
-  --status-completed: #34d399;
-  --status-paused: #fbbf24;
-  --status-error: #f87171;
-  --status-cancelled: #8b8b96;
-}
+/* (fallback :root ada di paling atas file) */
 
 body {
   background-color: var(--bg-base);

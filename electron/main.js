@@ -96,6 +96,55 @@ async function startServer() {
   console.log('[IDMM] Server ready on http://127.0.0.1:9977');
 }
 
+//  Theme persistence + window overlay sync
+// Theme disimpan di userData/theme.json supaya preload/main bisa baca
+// (localStorage hanya bisa dibaca renderer, tidak oleh main process).
+
+const THEME_META = {
+  dark:  { bg: '#010102', symbol: '#f8fafc' },
+  white: { bg: '#ffffff', symbol: '#1d1d1f' },
+  brown: { bg: '#f2f0eb', symbol: '#1f1f1f' },
+  pinky: { bg: '#ffffff', symbol: '#222222' },
+};
+
+function getThemePath() {
+  return path.join(app.getPath('userData'), 'theme.json');
+}
+
+function loadTheme() {
+  try {
+    const raw = fs.readFileSync(getThemePath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && THEME_META[parsed.theme]) return parsed.theme;
+  } catch { /* no file / invalid — default */ }
+  return 'dark';
+}
+
+function saveTheme(theme) {
+  if (!THEME_META[theme]) return;
+  try {
+    fs.mkdirSync(path.dirname(getThemePath()), { recursive: true });
+    fs.writeFileSync(getThemePath(), JSON.stringify({ theme }), 'utf8');
+  } catch (err) {
+    console.error('[IDMM] Gagal simpan theme:', err.message);
+  }
+}
+
+function applyThemeToWindow(win, theme) {
+  if (!win || win.isDestroyed()) return;
+  const meta = THEME_META[theme] || THEME_META.dark;
+  try {
+    win.setTitleBarOverlay({
+      color: meta.bg,
+      symbolColor: meta.symbol,
+      height: 32,
+    });
+    win.setBackgroundColor(meta.bg);
+  } catch (err) {
+    console.error('[IDMM] Gagal set overlay:', err.message);
+  }
+}
+
 //  Window 
 
 function createWindow() {
@@ -106,14 +155,14 @@ function createWindow() {
     minHeight: 400,
     title: 'IDMM',
     icon: path.join(__dirname, 'assets', 'icon.png'),
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME_META[loadTheme()].bg,
     show: false, // Show when ready
     autoHideMenuBar: true,
     frame: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
-      color: '#0f172a',
-      symbolColor: '#cbd5e1',
+      color: THEME_META[loadTheme()].bg,
+      symbolColor: THEME_META[loadTheme()].symbol,
       height: 32
     },
     webPreferences: {
@@ -301,5 +350,14 @@ ipcMain.handle('dialog:selectFolder', async () => {
     return filePaths[0];
   }
   return null;
+});
+
+ipcMain.handle('theme:get', () => loadTheme());
+
+ipcMain.handle('theme:set', (event, theme) => {
+  saveTheme(theme);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  applyThemeToWindow(win, theme);
+  return { ok: true, theme };
 });
 
