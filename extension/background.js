@@ -200,6 +200,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     switch (message.type) {
       case 'CHECK_STATUS':
+        // Selalu health-check fresh — kalau server mati, content script
+        // menyembunyikan floating button-nya.
+        serverOnline = await IDMM_API.healthCheck();
+        updateBadge();
         return { ok: true, online: serverOnline };
 
       case 'SEND_URL_TO_IDMM': {
