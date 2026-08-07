@@ -293,6 +293,9 @@
 
   function removeAllButtons() {
     document.querySelectorAll('.idmm-dl-btn').forEach((b) => b.remove());
+    document.querySelectorAll('a[data-idmm-processed]').forEach((a) => {
+      delete a.dataset.idmmProcessed;
+    });
   }
 
   function setOnline(v) {
