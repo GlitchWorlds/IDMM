@@ -63,6 +63,8 @@ const _globalWorkerSemaphore = {
   },
 };
 
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 class DownloadManager {
   /**
    * @param {Object} options
@@ -725,7 +727,7 @@ class DownloadManager {
         path: parsed.pathname + parsed.search,
         method: 'HEAD',
         headers: {
-          'User-Agent': 'IDMM/1.0',
+          'User-Agent': DEFAULT_USER_AGENT,
           ...headers,
         },
         timeout: 15000,
@@ -1315,7 +1317,7 @@ class DownloadManager {
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
-        'User-Agent': 'IDMM/1.0',
+        'User-Agent': DEFAULT_USER_AGENT,
         ...(opts.requestHeaders || {}),
       },
       timeout: opts.timeoutMs,

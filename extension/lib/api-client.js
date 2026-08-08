@@ -44,10 +44,14 @@ const IDMM_API = {
 
   //  Downloads 
 
-  async startDownload({ url, filename, cookies, referrer, threads, save_to, headers }) {
+  async startDownload({ url, filename, cookies, referrer, userAgent, threads, save_to, headers }) {
+    // Merge userAgent into headers
+    const reqHeaders = { ...(headers || {}) };
+    if (userAgent) reqHeaders['User-Agent'] = userAgent;
+
     return IDMM_API._fetch('/api/download', {
       method: 'POST',
-      body: JSON.stringify({ url, filename, cookies, referrer, threads, save_to, headers }),
+      body: JSON.stringify({ url, filename, cookies, referrer, threads, save_to, headers: reqHeaders }),
     });
   },
 

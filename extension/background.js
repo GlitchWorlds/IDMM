@@ -36,7 +36,7 @@ function updateBadge() {
 
 // ── Kirim download ke IDMM ──
 
-async function sendToIDMM({ url, filename, cookies, referrer }) {
+async function sendToIDMM({ url, filename, cookies, referrer, userAgent }) {
   if (!serverOnline) {
     serverOnline = await IDMM_API.healthCheck();
     updateBadge();
@@ -49,6 +49,7 @@ async function sendToIDMM({ url, filename, cookies, referrer }) {
       filename: filename || undefined,
       cookies: cookies || undefined,
       referrer: referrer || undefined,
+      userAgent: userAgent || undefined,
     });
     return { ok: true, result };
   } catch (err) {
@@ -219,6 +220,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           filename: message.downloadInfo?.filename,
           cookies: message.downloadInfo?.cookies || cookies,
           referrer: message.downloadInfo?.referrer || sender.tab?.url || '',
+          userAgent: message.downloadInfo?.userAgent || '',
         });
         return sent;
       }

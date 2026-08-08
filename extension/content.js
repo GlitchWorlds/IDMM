@@ -90,7 +90,7 @@
     return new Promise((resolve) => {
       try {
         chrome.runtime.sendMessage(
-          { type: 'SEND_URL_TO_IDMM', downloadInfo: { url, referrer: location.href } },
+          { type: 'SEND_URL_TO_IDMM', downloadInfo: { url, referrer: location.href, userAgent: navigator.userAgent } },
           (res) => {
             if (chrome.runtime.lastError) {
               resolve({ ok: false, error: chrome.runtime.lastError.message });
