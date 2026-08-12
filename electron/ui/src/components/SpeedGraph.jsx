@@ -28,8 +28,8 @@ function SpeedGraph({ data = [], mini = false }) {
   }
 
   return (
-    <div className="bg-slate-800/50 rounded-xl p-4">
-      <h3 className="text-sm font-medium text-slate-300 mb-3">Download Speed</h3>
+    <div className="surface border border-theme rounded-xl p-4">
+      <h3 className="text-sm font-medium text-main mb-3">Download Speed</h3>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
