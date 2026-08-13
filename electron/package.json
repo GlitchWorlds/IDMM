@@ -1,6 +1,6 @@
 {
   "name": "idmm-desktop",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "IDMM - Internet Download Manager Max",
   "author": "IDMM",
   "license": "MIT",
@@ -46,11 +46,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "assets/icon.ico",
@@ -90,4 +94,3 @@
     "electron-builder": "^25.0.0"
   }
 }
-

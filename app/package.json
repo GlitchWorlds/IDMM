@@ -1,6 +1,6 @@
 {
   "name": "idmm",
-  "version": "1.3.3",
+  "version": "1.4.1",
   "description": "IDMM - Internet Download Manager Max: Free, open-source, multi-threaded download manager",
   "main": "main.js",
   "scripts": {
