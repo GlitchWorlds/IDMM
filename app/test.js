@@ -211,7 +211,7 @@ async function runTests() {
   // Initialize IDMM
   const db = await IDMMDatabase.create(path.join(DATA_DIR, 'test.db'));
   db.setSetting('default_save_path', SAVE_DIR);
-  const settings = db.getAllSettings();
+  const settingsRes = db.getAllSettings();
   console.log('   Database initialized');
 
   let completedResult = null;
@@ -219,7 +219,7 @@ async function runTests() {
   const downloader = new DownloadManager({
     db,
     tempDir: TEMP_DIR,
-    settings,
+    settings: settingsRes.data,
     onComplete: (id, result) => {
       completedResult = result;
     },
