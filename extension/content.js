@@ -126,9 +126,9 @@
 
     if (e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
 
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    // e.preventDefault();
+    // e.stopPropagation();
+    // e.stopImmediatePropagation();
 
     const res = await sendUrl(url);
     if (res.ok) {
@@ -213,8 +213,8 @@
     btn.addEventListener('mouseleave', () => (btn.style.background = '#5e6ad2'));
 
     btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+      // e.preventDefault();
+      // e.stopPropagation();
 
       // Klik tombol X → tutup tombol ini (permanen per tab)
       if (e.target.closest('.idmm-x')) {
@@ -361,7 +361,7 @@
     loadHidden();
 
     // Interception klik tetap aktif walau semua tombol ditutup
-    document.addEventListener('click', handleClick, true);
+    // document.addEventListener('click', handleClick, true);
 
     if (document.body) {
       injectStyles();
@@ -382,3 +382,4 @@
 
   init();
 })();
+
