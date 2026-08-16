@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IDMM  Download Manager Max",
   "short_name": "IDMM",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7MAkOxFBEysB82Vs8Z06LsvfVqOp1uPWFzf8N0p/ym8L/NAC+tBdQ3A+FTJMMDQN/x++lwdtQphIhePQtpTbj6WqvoDoMdVIJBZ4rx7Htw/yCvcUIQz6P6ieaW9lkrGHVGoXL5rn3mUuAHzHq0E+7vEhlgZHy81rms+c58JVcCiSTr8WHHaWgQwHLTwVEVWklQyqlWb2TjuMM2Cllt6ohv7oOCRZQQUu7LZH68udNWDY370RwN1JiXhtRLFxQoIt3b1+22j6HgJb/7y/o2aoLbsSO5jZxwmIGY9cZyxIiXzM9zkpxcc01SZKEPdgnRfbBWvy/fkggtgCCSbBEZOcBQIDAQAB",
   "description": "Free, open-source download manager with multi-threaded acceleration. Intercepts downloads and sends them to IDMM for maximum speed.",
   "permissions": [
