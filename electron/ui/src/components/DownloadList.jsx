@@ -223,7 +223,7 @@ function DownloadItem({ download, onRefresh, onOpenDetail }) {
               </svg>
             </button>
           )}
-          {(isActive || isPaused || isError) && (
+          {(isActive || isPaused || isError || isCancelled) && (
             <button onClick={handleCancel} className="p-2 rounded-lg text-muted hover:text-red-400 hover:bg-surface-hover transition-colors" title="Cancel">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
