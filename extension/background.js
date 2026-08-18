@@ -37,6 +37,40 @@ function updateBadge() {
 // ── Kirim download ke IDMM ──
 
 async function sendToIDMM({ url, filename, cookies, referrer, userAgent }) {
+  // 1. Try Native Messaging first if available
+  if (chrome.runtime.sendNativeMessage) {
+    try {
+      const nativeResp = await new Promise((resolve, reject) => {
+        chrome.runtime.sendNativeMessage(
+          'com.idmm.native_host',
+          {
+            action: 'download',
+            url,
+            filename: filename || undefined,
+            cookies: cookies || undefined,
+            referrer: referrer || undefined,
+            user_agent: userAgent || undefined,
+          },
+          (response) => {
+            if (chrome.runtime.lastError) {
+              return reject(new Error(chrome.runtime.lastError.message));
+            }
+            resolve(response);
+          }
+        );
+      });
+
+      if (nativeResp && nativeResp.success) {
+        serverOnline = true;
+        updateBadge();
+        return { ok: true, result: nativeResp };
+      }
+    } catch (err) {
+      console.warn('[IDMM] Native messaging fallback to HTTP:', err.message);
+    }
+  }
+
+  // 2. HTTP/WS fallback
   if (!serverOnline) {
     serverOnline = await IDMM_API.healthCheck();
     updateBadge();

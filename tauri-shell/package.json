@@ -1,0 +1,19 @@
+{
+  "name": "idmm-desktop",
+  "version": "1.4.2",
+  "private": true,
+  "description": "IDMM - Internet Download Manager Max (Tauri)",
+  "scripts": {
+    "tauri": "tauri",
+    "build:ui": "cd ../electron/ui && npm run build",
+    "prepare:dist": "node -e \"const fs=require('fs');const p=require('path');if(fs.existsSync(p.join(__dirname,'ui-dist')))fs.rmSync(p.join(__dirname,'ui-dist'),{recursive:true});fs.cpSync(p.join(__dirname,'../electron/ui/build'),p.join(__dirname,'ui-dist'),{recursive:true})\"",
+    "dev": "npm run build:ui && npm run prepare:dist && cargo tauri dev",
+    "build": "npm run build:ui && npm run prepare:dist && cargo tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.1"
+  }
+}
