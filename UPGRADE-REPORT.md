@@ -26,7 +26,7 @@
 - **Usage:** `const { v4: uuidv4 } = require('uuid')` in `downloader.js` (line 9), called at line 184
 - **Verified:** `require('uuid')` works correctly with v14 in both `app/` and `electron/` — CJS support was restored via conditional exports
 - **Node version:** 24.18.0 (well above requirement)
-- **Result:** ✅ No code changes needed
+- **Result:** [PASS] No code changes needed
 
 ---
 
@@ -46,7 +46,7 @@
 | Async error handling | Already uses `async (req, res) =>` with try/catch | All routes |
 
 ### Result
-✅ All code already Express 5 compatible. Zero changes needed.
+[PASS] All code already Express 5 compatible. Zero changes needed.
 
 ---
 
@@ -54,11 +54,11 @@
 
 ### react / react-dom 19.2.7 → 19.2.8
 - **Type:** Patch release
-- **Result:** ✅ Upgraded. No breaking changes.
+- **Result:** [PASS] Upgraded. No breaking changes.
 
 ### tailwindcss 4.3.2 → 4.3.3, @tailwindcss/vite 4.3.2 → 4.3.3
 - **Type:** Patch release
-- **Result:** ✅ Upgraded. No breaking changes.
+- **Result:** [PASS] Upgraded. No breaking changes.
 
 ### recharts 2.15.4 → 3.10.1
 - **Breaking changes researched:**
@@ -77,7 +77,7 @@
   - No `Customized`, no `activeIndex`, no `alwaysShow`, no `isFront`, no `blendStroke`
   - Single axis — no multi-axis ordering concern
   - No TypeScript — no type rename concern
-- **Result:** ✅ Upgraded. No code changes needed. Build verified clean.
+- **Result:** [PASS] Upgraded. No code changes needed. Build verified clean.
 
 ### vite 6.4.3 → 8.2.1
 - **Breaking changes researched (skipping v7):**
@@ -89,7 +89,7 @@
   - Browser target updated (Chrome 111+, Firefox 114+, Safari 16.4+)
   - esbuild is now optional dependency
 - **IDMM vite.config.js:** Minimal config — `plugins: [react(), tailwindcss()]`, `base: './'`, simple build/server options. No esbuild options, no Rollup config, no manualChunks.
-- **Result:** ✅ Upgraded. Build succeeded in 339ms. Reduced from 119 to 76 total packages (59 removed).
+- **Result:** [PASS] Upgraded. Build succeeded in 339ms. Reduced from 119 to 76 total packages (59 removed).
 
 ### @vitejs/plugin-react 4.7.0 → 6.0.5
 - **Breaking changes researched:**
@@ -100,7 +100,7 @@
   - Requires Node 20.19+ or 22.12+
   - `exclude` default changed to `[/\/node_modules\//]`
 - **IDMM usage:** `react()` with no options — no Babel config, no custom options
-- **Result:** ✅ Upgraded. Fully compatible with our minimal config.
+- **Result:** [PASS] Upgraded. Fully compatible with our minimal config.
 
 ---
 
@@ -108,11 +108,11 @@
 
 ### concurrently 9.2.4 → 10.0.4
 - **Breaking changes:**
-  - Requires Node.js ≥ 22.0.0 (we have 24.18.0 ✅)
+  - Requires Node.js ≥ 22.0.0 (we have 24.18.0 [PASS])
   - ESM-only package
   - Prefix colors default to "automatic" (was "reset")
 - **IDMM usage:** CLI only in `dev` script: `concurrently "cd ../app && node main.js" "electron . --dev"`
-- **Result:** ✅ Upgraded. CLI interface unchanged.
+- **Result:** [PASS] Upgraded. CLI interface unchanged.
 
 ### electron 35.7.5 — NOT UPGRADED (kept at 35)
 - **Gap:** 35 → 43 = 8 major versions
@@ -124,7 +124,7 @@
   - v42: Electron binary no longer downloads via postinstall (uses on-demand download), offscreen rendering scale factor default changed
   - v43: File dialog defaults to Downloads directory, NativeImage.toBitmap() normalizes to sRGB, clipboard module removed from renderer, rounded corners on Linux frameless windows
 - **Risk assessment:** HIGH. 8 major versions with cumulative behavioral changes. The postinstall→on-demand download change (v42) affects the build pipeline. Dialog default path changes affect user experience. Requires thorough testing of all Electron-specific features.
-- **Decision:** 🚫 NOT upgraded. Recommend incremental upgrade (35→38→41→43) with testing at each step.
+- **Decision:** [NO] NOT upgraded. Recommend incremental upgrade (35→38→41→43) with testing at each step.
 
 ### electron-builder 25.1.8 — NOT UPGRADED (kept at 25)
 - **Breaking changes in v26:**
@@ -133,7 +133,7 @@
   - New `ignoredProductionDependencies` option
 - **v27 (latest major):** Full ESM migration, requires Node ≥ 22.12, deprecated APIs hard-deleted
 - **Risk assessment:** MEDIUM-HIGH. Build pipeline changes could break the NSIS installer workflow. Should be upgraded together with Electron.
-- **Decision:** 🚫 NOT upgraded. Should be done alongside Electron upgrade.
+- **Decision:** [NO] NOT upgraded. Should be done alongside Electron upgrade.
 
 ---
 
@@ -174,12 +174,12 @@ All `package.json` files verified with correct `^` semver ranges:
 Tests: 8 passed, 1 failed, 0 skipped
 
 Failures:
-  ✗ File integrity verification: SHA-256 hash mismatch or file missing
+  [FAIL] File integrity verification: SHA-256 hash mismatch or file missing
 ```
 
 **The single failure is a known pre-existing issue** — race condition in test cleanup where the SHA-256 hash verification fails due to file merge timing. This is NOT a regression from the dependency upgrades.
 
-**UI build:** ✅ Successful (vite v8.2.1, 339ms, 22 modules transformed)
+**UI build:** [PASS] Successful (vite v8.2.1, 339ms, 22 modules transformed)
 
 ---
 
@@ -188,9 +188,9 @@ Failures:
 ### D:\IDMM\app
 | Package | Before | After | Change |
 |---------|--------|-------|--------|
-| express | 4.x | 5.2.1 | ⬆️ Major |
-| uuid | 11.x | 14.0.1 | ⬆️ Major |
-| ws | 8.21.0 | 8.21.3 | ⬆️ Patch |
+| express | 4.x | 5.2.1 | [UPGRADE] Major |
+| uuid | 11.x | 14.0.1 | [UPGRADE] Major |
+| ws | 8.21.0 | 8.21.3 | [UPGRADE] Patch |
 | cors | 2.8.6 | 2.8.6 | — |
 | helmet | 8.3.0 | 8.3.0 | — |
 | sql.js | 1.14.1 | 1.14.1 | — |
@@ -198,20 +198,20 @@ Failures:
 ### D:\IDMM\electron
 | Package | Before | After | Change |
 |---------|--------|-------|--------|
-| concurrently | 9.2.4 | 10.0.4 | ⬆️ Major |
+| concurrently | 9.2.4 | 10.0.4 | [UPGRADE] Major |
 | electron | 35.7.5 | 35.7.5 | — (deferred) |
 | electron-builder | 25.1.8 | 25.1.8 | — (deferred) |
 
 ### D:\IDMM\electron\ui
 | Package | Before | After | Change |
 |---------|--------|-------|--------|
-| react | 19.2.7 | 19.2.8 | ⬆️ Patch |
-| react-dom | 19.2.7 | 19.2.8 | ⬆️ Patch |
-| recharts | 2.15.4 | 3.10.1 | ⬆️ Major |
-| vite | 6.4.3 | 8.2.1 | ⬆️ Major (2 majors) |
-| @vitejs/plugin-react | 4.7.0 | 6.0.5 | ⬆️ Major (2 majors) |
-| @tailwindcss/vite | 4.3.2 | 4.3.3 | ⬆️ Patch |
-| tailwindcss | 4.3.2 | 4.3.3 | ⬆️ Patch |
+| react | 19.2.7 | 19.2.8 | [UPGRADE] Patch |
+| react-dom | 19.2.7 | 19.2.8 | [UPGRADE] Patch |
+| recharts | 2.15.4 | 3.10.1 | [UPGRADE] Major |
+| vite | 6.4.3 | 8.2.1 | [UPGRADE] Major (2 majors) |
+| @vitejs/plugin-react | 4.7.0 | 6.0.5 | [UPGRADE] Major (2 majors) |
+| @tailwindcss/vite | 4.3.2 | 4.3.3 | [UPGRADE] Patch |
+| tailwindcss | 4.3.2 | 4.3.3 | [UPGRADE] Patch |
 
 ### Package Count Change (electron/ui)
 - Before: 119 packages

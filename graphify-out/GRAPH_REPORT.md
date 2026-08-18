@@ -39,7 +39,7 @@
 - patch.js
 - preload.js
 - content.js
-- 🚀 IDMM — Internet Download Manager Max
+-  IDMM — Internet Download Manager Max
 - Dokumentasi Produksi IDMM (Internet Download Manager Max)
 - README.md
 - 4. KOMPONEN DETAIL
@@ -149,7 +149,7 @@ Nodes (5): crypto, fs, hashFile(), path, verifyFile()
 Cohesion: 0.50
 Nodes (7): DOWNLOAD_EXTENSIONS, init(), injectButton(), injectStyles(), isDownloadable(), scanPage(), setupObserver()
 
-### Community 28 - "🚀 IDMM — Internet Download Manager Max"
+### Community 28 - " IDMM — Internet Download Manager Max"
 Cohesion: 0.12
 Nodes (15): API & Integration, Browser Extension, Browser Extension, Desktop App (Electron), Download Engine, Download & Install, Features Detail, IDMM — Internet Download Manager Max (+7 more)
 

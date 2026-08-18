@@ -41,7 +41,7 @@
 - preload.js
 - Priority P2  NICE TO HAVE
 - IDMM Security & Quality Audit Report
-- 🚀 IDMM — Internet Download Manager Max
+-  IDMM — Internet Download Manager Max
 - Security Checklist
 - IDMM v3 Security + Quality Audit Report
 - IDMM v4 Security + Quality Audit Report
@@ -185,7 +185,7 @@ Nodes (20): F10  Duplicate download check (Q3.5), F11  Unbounded worker concurre
 Cohesion: 0.11
 Nodes (17): File-by-File Summary, IDMM Security & Quality Audit Report, P0  Fix Before Release, P1  Fix Soon, P2  Improve When Convenient, Priority Remediation Plan, Q1  Error Handling, Q2  Resource Management (+9 more)
 
-### Community 28 - "🚀 IDMM — Internet Download Manager Max"
+### Community 28 - " IDMM — Internet Download Manager Max"
 Cohesion: 0.05
 Nodes (36): Changelog, QC & Security Update, [v1.2.0] - 2026-07-20, 1. Arsitektur Proyek & Tech Stack, 2. Spesifikasi Fitur Terkini, 3. Changelog Ringkas, 4. Aturan Pengembangan (SOP), A. Core Engine (Backend) (+28 more)
 
