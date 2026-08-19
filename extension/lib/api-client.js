@@ -254,46 +254,156 @@ const IDMM_API = {
 
   //  File Type Detection 
 
+  // IDM Standard Download Extensions
+  DOWNLOAD_EXTENSIONS: new Set([
+    // Media & Video/Audio
+    '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mpg', '.mpeg', '.m4v', '.3gp', '.ts', '.vob',
+    '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus', '.mid', '.midi',
+    // Archives & Compressed
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.zst', '.iso', '.tgz', '.tbz2', '.cab', '.dmg',
+    // Documents & E-books
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp',
+    '.epub', '.mobi', '.cbz', '.cbr',
+    // Executables & Installers
+    '.exe', '.msi', '.pkg', '.deb', '.rpm', '.apk', '.ipa', '.appx', '.appxbundle', '.appimage', '.bin',
+    // Disk Images & System
+    '.img', '.vhd', '.vhdx', '.vmdk',
+    // Developer & Packages
+    '.dll', '.so', '.dylib', '.whl', '.jar', '.nupkg', '.crx', '.xpi',
+    // Fonts (when downloaded directly)
+    '.ttf', '.otf', '.woff', '.woff2',
+  ]),
+
+  // File types that should NEVER be automatically intercepted (navigation, web assets, scripts, trackers)
+  IGNORED_EXTENSIONS: new Set([
+    '.html', '.htm', '.xhtml', '.php', '.asp', '.aspx', '.jsp', '.jspx', '.action', '.do',
+    '.css', '.js', '.mjs', '.jsx', '.ts', '.tsx', '.json', '.xml', '.rss', '.atom',
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.tif', '.tiff',
+    '.map', '.txt', '.log',
+  ]),
+
+  // Non-downloadable / ignored MIME types
+  IGNORED_MIME_TYPES: new Set([
+    'text/html',
+    'text/plain',
+    'text/css',
+    'text/javascript',
+    'application/javascript',
+    'application/x-javascript',
+    'application/json',
+    'application/manifest+json',
+    'application/xml',
+    'text/xml',
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    'image/x-icon',
+    'image/bmp',
+    'text/event-stream',
+  ]),
+
   INTERCEPT_EXTENSIONS: {
-    video: ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.ts', '.mpg', '.mpeg'],
+    video: ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.3gp', '.ts', '.mpg', '.mpeg'],
     audio: ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus'],
-    archive: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso', '.tgz'],
-    software: ['.exe', '.msi', '.dmg', '.deb', '.rpm', '.apk', '.appx', '.appimage'],
+    archive: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso', '.tgz', '.7z', '.cab', '.dmg'],
+    software: ['.exe', '.msi', '.pkg', '.deb', '.rpm', '.apk', '.appx', '.appimage', '.bin', '.jar'],
     document: ['.pdf', '.docx', '.xlsx', '.pptx', '.doc', '.xls', '.ppt', '.epub'],
   },
 
   /**
    * Determine if a download should be intercepted.
-   * @param {string} filename
-   * @param {number} fileSize - bytes, -1 if unknown
-   * @param {Object} settings - from getSettings()
+   * Filters out web pages, tracking pixels/beacons, and small non-executable/archive files.
+   *
+   * @param {Object|string} itemOrFilename - download item object or filename string
+   * @param {number} [fileSize] - bytes, -1 if unknown
+   * @param {Object} [settings] - from getSettings()
    * @returns {boolean}
    */
-  shouldIntercept(filename, fileSize, settings) {
-    if (!settings.enabled) return false;
-    if (!filename) return false;
+  shouldIntercept(itemOrFilename, fileSize, settings) {
+    let filename = '';
+    let mime = '';
+    let url = '';
+    let totalBytes = fileSize || -1;
+    let currentSettings = settings || IDMM_API.defaultSettings();
 
-    const lower = filename.toLowerCase();
+    if (typeof itemOrFilename === 'object' && itemOrFilename !== null) {
+      filename = itemOrFilename.filename || '';
+      mime = itemOrFilename.mime || '';
+      url = itemOrFilename.finalUrl || itemOrFilename.url || '';
+      if (itemOrFilename.totalBytes !== undefined) {
+        totalBytes = itemOrFilename.totalBytes;
+      }
+    } else {
+      filename = itemOrFilename || '';
+    }
 
-    // Size threshold  skip small files
-    const minSize = settings.interceptMinSize || 0;
-    if (fileSize > 0 && fileSize < minSize) return false;
+    if (!currentSettings.enabled) return false;
+    if (!filename && !url) return false;
 
-    // Intercept all files if enabled
-    if (settings.interceptAll) return true;
+    // 1. Filter out ignored MIME types unless Content-Disposition forces attachment
+    if (mime) {
+      const cleanMime = mime.toLowerCase().split(';')[0].trim();
+      if (IDMM_API.IGNORED_MIME_TYPES.has(cleanMime)) {
+        return false;
+      }
+    }
 
+    // Extract filename from URL if filename is empty
+    let cleanFilename = filename;
+    if (!cleanFilename && url) {
+      try {
+        const u = new URL(url);
+        cleanFilename = u.pathname.split('/').pop() || '';
+      } catch {
+        cleanFilename = '';
+      }
+    }
+    cleanFilename = cleanFilename.split('?')[0].split('#')[0].trim();
+
+    const lower = cleanFilename.toLowerCase();
+    const lastDot = lower.lastIndexOf('.');
+    const ext = lastDot !== -1 ? lower.slice(lastDot) : '';
+
+    // 2. Reject explicitly ignored extensions (HTML, JS, CSS, JSON, images, web pages)
+    if (ext && IDMM_API.IGNORED_EXTENSIONS.has(ext)) {
+      return false;
+    }
+
+    // 3. Size threshold: skip very small files (< 10 KB) unless they have explicit valid download extensions
+    const isStandardDownloadExt = ext && IDMM_API.DOWNLOAD_EXTENSIONS.has(ext);
+    const minSize = currentSettings.interceptMinSize || 0;
+    if (minSize > 0 && totalBytes > 0 && totalBytes < minSize) {
+      return false;
+    }
+    // Files < 10 KB without a valid downloadable extension are likely beacons/tracking/web scraps
+    if (totalBytes > 0 && totalBytes < 10240 && !isStandardDownloadExt) {
+      return false;
+    }
+
+    // 4. If interceptAll is true:
+    // Only intercept if it has a valid downloadable extension OR totalBytes is substantial (>= 50 KB) without ignored ext
+    if (currentSettings.interceptAll) {
+      if (isStandardDownloadExt) return true;
+      if (!ext && totalBytes >= 51200) return true;
+      if (ext && !IDMM_API.IGNORED_EXTENSIONS.has(ext) && totalBytes >= 51200) return true;
+      return false;
+    }
+
+    // 5. Category-based filter
     const categories = {
-      video: settings.interceptVideo,
-      audio: settings.interceptAudio,
-      archive: settings.interceptArchive,
-      software: settings.interceptSoftware,
-      document: settings.interceptDocument,
+      video: currentSettings.interceptVideo,
+      audio: currentSettings.interceptAudio,
+      archive: currentSettings.interceptArchive,
+      software: currentSettings.interceptSoftware,
+      document: currentSettings.interceptDocument,
     };
 
     for (const [category, enabled] of Object.entries(categories)) {
       if (!enabled) continue;
       const exts = IDMM_API.INTERCEPT_EXTENSIONS[category];
-      if (exts && exts.some(ext => lower.endsWith(ext))) return true;
+      if (exts && exts.some(e => lower.endsWith(e))) return true;
     }
 
     return false;

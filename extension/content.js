@@ -17,22 +17,29 @@
   // ── Config ──
 
   const DOWNLOAD_EXTENSIONS = new Set([
-    // Media
-    '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mpg', '.mpeg',
-    '.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a', '.m4v', '.ts', '.opus',
-    // Archives
-    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.zst', '.iso', '.tgz',
-    // Documents
-    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-    '.epub', '.mobi', '.cbz', '.cbr', '.csv', '.txt',
-    // Executables
-    '.exe', '.msi', '.dmg', '.pkg', '.deb', '.rpm', '.apk', '.ipa', '.appx', '.appimage',
-    // Images (large format)
-    '.img', '.vhd', '.vmdk',
-    // Developer
-    '.dll', '.so', '.dylib', '.whl', '.jar', '.nupkg',
-    // Fonts / Assets
+    // Media & Video/Audio
+    '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mpg', '.mpeg', '.m4v', '.3gp', '.ts', '.vob',
+    '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus', '.mid', '.midi',
+    // Archives & Compressed
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.zst', '.iso', '.tgz', '.tbz2', '.cab', '.dmg',
+    // Documents & E-books
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp',
+    '.epub', '.mobi', '.cbz', '.cbr',
+    // Executables & Installers
+    '.exe', '.msi', '.pkg', '.deb', '.rpm', '.apk', '.ipa', '.appx', '.appxbundle', '.appimage', '.bin',
+    // Disk Images & System
+    '.img', '.vhd', '.vhdx', '.vmdk',
+    // Developer & Packages
+    '.dll', '.so', '.dylib', '.whl', '.jar', '.nupkg', '.crx', '.xpi',
+    // Fonts
     '.ttf', '.otf', '.woff', '.woff2',
+  ]);
+
+  const IGNORED_EXTENSIONS = new Set([
+    '.html', '.htm', '.xhtml', '.php', '.asp', '.aspx', '.jsp', '.jspx', '.action', '.do',
+    '.css', '.js', '.mjs', '.jsx', '.ts', '.tsx', '.json', '.xml', '.rss', '.atom',
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.tif', '.tiff',
+    '.map', '.txt', '.log',
   ]);
 
   const HIDDEN_KEY = 'idmm_hidden_links'; // URL yang tombolnya ditutup user (per tab)
@@ -52,7 +59,9 @@
       const pathname = u.pathname.toLowerCase().split('?')[0];
       const lastDot = pathname.lastIndexOf('.');
       if (lastDot === -1) return false;
-      return DOWNLOAD_EXTENSIONS.has(pathname.slice(lastDot));
+      const ext = pathname.slice(lastDot);
+      if (IGNORED_EXTENSIONS.has(ext)) return false;
+      return DOWNLOAD_EXTENSIONS.has(ext);
     } catch {
       return false;
     }

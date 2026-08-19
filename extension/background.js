@@ -124,7 +124,7 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
     return;
   }
 
-  const should = IDMM_API.shouldIntercept(item.filename, item.totalBytes, settings);
+  const should = IDMM_API.shouldIntercept(item, item.totalBytes, settings);
   if (!should) {
     suggest();
     return;
