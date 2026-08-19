@@ -396,6 +396,7 @@ pub fn build_router(state: AppState, static_dir: Option<&std::path::Path>) -> Ro
         .route("/api/health", get(health))
         .route("/api/ws-status", get(ws_status))
         .route("/api/downloads", get(get_downloads).post(create_download))
+        .route("/api/download", post(create_download))
         .route("/api/downloads/{id}", get(get_download).delete(delete_download))
         .route("/api/downloads/{id}/pause", post(pause_download))
         .route("/api/downloads/{id}/resume", post(resume_download))

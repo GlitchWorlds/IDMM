@@ -78,7 +78,14 @@ fn main() {
 
             eprintln!("[IDMM] Starting core engine from: {:?}", exe_path);
 
-            let child = std::process::Command::new(exe_path)
+            let mut cmd = std::process::Command::new(exe_path);
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            }
+
+            let child = cmd
                 .spawn()
                 .expect("failed to start idmm-core.exe");
 
