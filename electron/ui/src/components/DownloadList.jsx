@@ -7,7 +7,8 @@ function getStatusColor(status) {
     case 'active': return 'text-accent';
     case 'completed': return 'status-completed';
     case 'paused': return 'status-paused';
-    case 'error': return 'status-error';
+    case 'error':
+    case 'failed': return 'status-error';
     case 'cancelled': return 'status-cancelled';
     default: return 'text-muted';
   }
@@ -23,6 +24,7 @@ function getStatusBadge(status) {
     waiting: 'bg-slate-500/20 text-muted',
     cancelled: 'bg-slate-500/20 status-cancelled',
     error: 'bg-red-500/20 status-error',
+    failed: 'bg-red-500/20 status-error',
   };
   return colors[status] || 'bg-slate-500/20 text-muted';
 }
@@ -33,7 +35,7 @@ function DownloadItem({ download, onRefresh, onOpenDetail }) {
   const isActive = status === 'downloading' || status === 'active';
   const isPaused = status === 'paused';
   const isCompleted = status === 'completed';
-  const isError = status === 'error';
+  const isError = status === 'error' || status === 'failed';
   const isCancelled = status === 'cancelled';
   const isQueued = status === 'queued' || status === 'waiting';
 
