@@ -354,6 +354,7 @@ impl DownloadManager {
         let _ = self.db.update_download(id, &fields);
 
         self.active.remove(id);
+        self.emit(EngineEvent::Status { id: id.to_string(), status: "paused".to_string() });
         self.process_queue().await;
 
         Ok(json!({ "id": id, "status": "paused" }))
@@ -410,6 +411,7 @@ impl DownloadManager {
         let mut fields = HashMap::new();
         fields.insert("status".into(), json!("downloading"));
         let _ = self.db.update_download(id, &fields);
+        self.emit(EngineEvent::Status { id: id.to_string(), status: "downloading".to_string() });
 
         let retry_count = self.get_setting_int("retry_count", 3).await;
         let timeout_ms = self.get_setting_int("timeout_ms", 30000).await;
@@ -455,6 +457,7 @@ impl DownloadManager {
         let _ = self.db.update_download(id, &fields);
 
         self.queue.lock().await.retain(|e| e.id != id);
+        self.emit(EngineEvent::Status { id: id.to_string(), status: "cancelled".to_string() });
         self.process_queue().await;
 
         Ok(json!({ "id": id, "status": "cancelled" }))
@@ -477,6 +480,7 @@ impl DownloadManager {
 
         self.db.delete_download(id).map_err(|e| (500, e))?;
         self.queue.lock().await.retain(|e| e.id != id);
+        self.emit(EngineEvent::Removed { id: id.to_string() });
 
         Ok(json!({ "id": id, "deleted": true, "fileDeleted": delete_file }))
     }

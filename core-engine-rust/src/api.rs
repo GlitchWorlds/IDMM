@@ -1,15 +1,21 @@
 use crate::engine::{DownloadManager, EngineEvent};
 use crate::models::*;
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use tokio::time::{interval, Duration};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
+
+static WS_CLIENT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 /// Shared app state.
 #[derive(Clone)]
@@ -29,12 +35,147 @@ async fn health(_state: State<AppState>) -> Json<serde_json::Value> {
 }
 
 async fn ws_status(State(_state): State<AppState>) -> Json<serde_json::Value> {
+    let count = WS_CLIENT_COUNT.load(Ordering::Relaxed);
     Json(serde_json::json!({
         "ws_running": true,
-        "ws_clients_count": 0,
-        "ws_set_count": 0,
+        "ws_clients_count": count,
+        "ws_set_count": count,
         "clients": []
     }))
+}
+
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_ws_client(socket, state))
+}
+
+async fn handle_ws_client(socket: WebSocket, state: AppState) {
+    WS_CLIENT_COUNT.fetch_add(1, Ordering::Relaxed);
+    let (mut sender, mut receiver) = socket.split();
+
+    // 1. Send initial active downloads state
+    let init_states = state.dm.get_active_states().await;
+    let init_msg = serde_json::json!({
+        "type": "init",
+        "downloads": init_states,
+    });
+    if let Ok(text) = serde_json::to_string(&init_msg) {
+        if sender.send(Message::Text(text.into())).await.is_err() {
+            WS_CLIENT_COUNT.fetch_sub(1, Ordering::Relaxed);
+            return;
+        }
+    }
+
+    let mut event_rx = state.dm.subscribe();
+    let mut tick = interval(Duration::from_millis(500));
+
+    loop {
+        tokio::select! {
+            // Incoming WS message from client (drain/ping-pong/close)
+            msg = receiver.next() => {
+                match msg {
+                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Ok(Message::Ping(p))) => {
+                        if sender.send(Message::Pong(p)).await.is_err() {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // Engine broadcast events (Added, Completed, Error, etc.)
+            event = event_rx.recv() => {
+                match event {
+                    Ok(EngineEvent::Added { id: _, data }) => {
+                        let msg = serde_json::json!({
+                            "type": "added",
+                            "data": data,
+                        });
+                        if let Ok(text) = serde_json::to_string(&msg) {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Ok(EngineEvent::Status { id, status }) => {
+                        let msg = serde_json::json!({
+                            "type": "status",
+                            "id": id,
+                            "status": status,
+                        });
+                        if let Ok(text) = serde_json::to_string(&msg) {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Ok(EngineEvent::Completed { id, result }) => {
+                        let mut val = serde_json::json!({
+                            "type": "status",
+                            "id": id,
+                            "status": "completed",
+                        });
+                        if let Some(map) = val.as_object_mut() {
+                            if let Some(res_map) = result.as_object() {
+                                for (k, v) in res_map {
+                                    map.insert(k.clone(), v.clone());
+                                }
+                            }
+                        }
+                        if let Ok(text) = serde_json::to_string(&val) {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Ok(EngineEvent::Error { id, error }) => {
+                        let msg = serde_json::json!({
+                            "type": "status",
+                            "id": id,
+                            "status": "failed",
+                            "error": error,
+                        });
+                        if let Ok(text) = serde_json::to_string(&msg) {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Ok(EngineEvent::Removed { id }) => {
+                        let msg = serde_json::json!({
+                            "type": "removed",
+                            "id": id,
+                        });
+                        if let Ok(text) = serde_json::to_string(&msg) {
+                            if sender.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // 500ms progress tick broadcast
+            _ = tick.tick() => {
+                let active_states = state.dm.get_active_states().await;
+                if !active_states.is_empty() {
+                    let progress_msg = serde_json::json!({
+                        "type": "progress",
+                        "downloads": active_states,
+                    });
+                    if let Ok(text) = serde_json::to_string(&progress_msg) {
+                        if sender.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    WS_CLIENT_COUNT.fetch_sub(1, Ordering::Relaxed);
 }
 
 async fn get_downloads(
@@ -392,6 +533,7 @@ pub fn build_router(state: AppState, static_dir: Option<&std::path::Path>) -> Ro
         .allow_headers(Any);
 
     let api = Router::new()
+        .route("/ws", get(ws_handler))
         .route("/health", get(health))
         .route("/api/health", get(health))
         .route("/api/ws-status", get(ws_status))
