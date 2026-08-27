@@ -23,7 +23,7 @@ fn main() {
     const INIT_SCRIPT: &str = r#"
         window.idmm = {
             platform: 'win32',
-            version: '1.4.2',
+            version: '1.4.4',
             apiUrl: 'http://127.0.0.1:9977',
             selectFolder: async function() {
                 try {

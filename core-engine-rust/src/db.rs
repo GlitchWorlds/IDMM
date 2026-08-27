@@ -23,6 +23,13 @@ impl Database {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         }
         let conn = Connection::open(db_path).map_err(|e| e.to_string())?;
+        // SQLite optimization: WAL mode, NORMAL synchronous, foreign keys enabled
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA foreign_keys = ON;
+             PRAGMA busy_timeout = 5000;"
+        ).map_err(|e| format!("Failed to apply SQLite pragmas: {}", e))?;
         let db = Self { conn: Mutex::new(conn) };
         db.init_tables()?;
         db.init_settings()?;

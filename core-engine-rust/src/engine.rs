@@ -223,14 +223,21 @@ impl DownloadManager {
         let mime_type = probe.content_type.clone().unwrap_or_else(|| utils::detect_mime(&final_filename));
         let category = utils::resolve_category(&final_filename, probe.content_type.as_deref());
 
-        // Thread count
+        // Thread count (v1.4.4 fix: an explicit `threads` value from the
+        // request (valid range 1-128) now WINS over auto mode. Previously the
+        // request defaulted to thread_mode "auto", so an explicit threads=8
+        // was silently overwritten by the server-side auto-tuned value.)
+        let max_manual = self.get_setting_int("max_threads_per_download", 128).await;
+        let requested_threads = match req.threads {
+            Some(t) if t >= 1 && t <= 128 => Some(t.clamp(1, max_manual)),
+            _ => None, // absent or invalid → fall back to auto-tune below
+        };
         let final_threads = if !probe.accepts_ranges || probe.content_length == 0 {
             1
-        } else if thread_mode == "auto" {
-            auto_detect_threads(probe.content_length)
+        } else if let Some(t) = requested_threads {
+            t
         } else {
-            let max_manual = self.get_setting_int("max_threads_per_download", 128).await;
-            req.threads.unwrap_or(4).clamp(1, max_manual)
+            auto_detect_threads(probe.content_length)
         };
 
         let download_id = uuid::Uuid::new_v4().to_string();
@@ -377,6 +384,33 @@ impl DownloadManager {
             return Err((400, "Download already completed".into()));
         }
 
+        // v1.4.4 fix: if the merged output file already exists at full size
+        // (crash happened between file move and DB status update), finalize
+        // the SAME record in place instead of attempting a doomed re-merge
+        // with missing chunk files.
+        if db_dl.total_size > 0 {
+            let output_path = Path::new(&db_dl.save_to).join(&db_dl.filename);
+            if let Ok(meta) = fs::metadata(&output_path).await {
+                if meta.len() as i64 == db_dl.total_size {
+                    let mut fields = HashMap::new();
+                    fields.insert("status".into(), json!("completed"));
+                    fields.insert("downloaded".into(), json!(db_dl.total_size));
+                    fields.insert("completed_at".into(), json!(chrono::Utc::now().to_rfc3339()));
+                    fields.insert("error".into(), json!(serde_json::Value::Null));
+                    let _ = self.db.update_download(id, &fields);
+                    self.emit(EngineEvent::Completed {
+                        id: id.to_string(),
+                        result: json!({
+                            "filename": db_dl.filename,
+                            "save_to": db_dl.save_to,
+                            "total_size": db_dl.total_size,
+                        }),
+                    });
+                    return Ok(json!({ "id": id, "status": "completed" }));
+                }
+            }
+        }
+
         let chunks = self.db.get_chunks(id).map_err(|e| (500, e))?;
         let total_downloaded: i64 = chunks.iter().map(|c| c.downloaded_bytes).sum();
 
@@ -440,6 +474,30 @@ impl DownloadManager {
         });
 
         Ok(json!({ "id": id, "status": "downloading" }))
+    }
+
+    /// v1.4.4 fix (BUG 1e): startup requeue — puts a DB record with status
+    /// 'queued' (or 'downloading') back into the manager queue WITHOUT
+    /// creating any new record. Draining respects max_concurrent_downloads,
+    /// and every drained entry resumes under its ORIGINAL record ID.
+    pub async fn requeue_startup(self: &Arc<Self>, id: &str) -> Result<serde_json::Value, (u16, String)> {
+        let db_dl = self.db.get_download(id).map_err(|e| (500, e))?
+            .ok_or((404, "Download not found".to_string()))?;
+        if db_dl.status != "queued" && db_dl.status != "downloading" {
+            return Err((400, format!("Download is not resumable from startup (status: {})", db_dl.status)));
+        }
+        if self.active.contains_key(id)
+            || self.queue.lock().await.iter().any(|e| e.id == id)
+        {
+            return Ok(json!({ "id": id, "status": "already-active" }));
+        }
+        self.queue.lock().await.push(QueueEntry {
+            id: id.to_string(),
+            priority: PRIORITY_NORMAL,
+            added_at: Instant::now(),
+        });
+        self.process_queue().await;
+        Ok(json!({ "id": id, "status": "queued" }))
     }
 
     pub async fn cancel_download(self: &Arc<Self>, id: &str) -> Result<serde_json::Value, (u16, String)> {
@@ -1090,19 +1148,26 @@ impl DownloadManager {
         let probe = self.probe_url(&state.url, headers).await?;
         state.total_size.store(probe.content_length, Ordering::Relaxed);
 
+        // v1.4.4 fix: preserve the thread count decided when the record was
+        // created (explicit request value or prior auto-tune) instead of
+        // blindly re-running auto-tune, which overwrote requested threads.
         let threads = if !probe.accepts_ranges || probe.content_length == 0 {
             1
+        } else if state.threads >= 1 {
+            state.threads
         } else {
             auto_detect_threads(probe.content_length)
         };
 
-        // Update threads in state (unsafe but chunks empty so safe)
-        let state_mut = unsafe { &mut *(Arc::as_ptr(state) as *mut ActiveDownload) };
-        state_mut.threads = threads;
+        if threads != state.threads {
+            // Update threads in state (unsafe but chunks empty so safe)
+            let state_mut = unsafe { &mut *(Arc::as_ptr(state) as *mut ActiveDownload) };
+            state_mut.threads = threads;
 
-        let mut fields = HashMap::new();
-        fields.insert("threads".into(), json!(threads));
-        let _ = self.db.update_download(&state.id, &fields);
+            let mut fields = HashMap::new();
+            fields.insert("threads".into(), json!(threads));
+            let _ = self.db.update_download(&state.id, &fields);
+        }
 
         if probe.accepts_ranges && probe.content_length > 0 {
             self.run_chunked_download(state, headers, retry_count, timeout_ms, speed_limit).await
@@ -1121,6 +1186,9 @@ impl DownloadManager {
                 fields.insert("status".into(), json!("completed"));
                 fields.insert("downloaded".into(), json!(state.total_size.load(Ordering::Relaxed)));
                 fields.insert("completed_at".into(), json!(chrono::Utc::now().to_rfc3339()));
+                // v1.4.4: clear stale error from any prior failed attempt so a
+                // completed record never reports a leftover failure message.
+                fields.insert("error".into(), json!(serde_json::Value::Null));
                 let _ = self.db.update_download(&id, &fields);
 
                 self.active.remove(&id);

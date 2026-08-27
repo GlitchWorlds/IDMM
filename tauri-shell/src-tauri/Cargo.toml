@@ -1,6 +1,6 @@
 [package]
 name = "idmm-desktop"
-version = "1.4.2"
+version = "1.4.4"
 description = "IDMM - Internet Download Manager Max"
 authors = ["IDMM"]
 edition = "2021"

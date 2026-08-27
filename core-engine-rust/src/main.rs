@@ -54,36 +54,46 @@ async fn async_main() {
     let dm = DownloadManager::new(Arc::clone(&db), temp_dir);
     let state = AppState { dm: Arc::clone(&dm) };
 
-    // Auto-resume previously active downloads
+    // ── Auto-resume (v1.4.4 fix) ──
+    // Previously this called start_download() for every 'downloading' record,
+    // which created a NEW record + UUID and appended "(1)" filename suffixes
+    // via ensure_unique_filename(). Now we RESUME the SAME record in place:
+    //   - status downloading/queued → dm.resume_download(&id)
+    //     (updates the existing record; chunk offsets / .part files reused;
+    //      missing partial files restart from scratch under the same ID)
+    //   - queued tasks were previously never resumed at all — now they are
+    //     enqueued into the manager queue with their original priority.
     {
-        let downloads = db.list_downloads(Some("downloading"), "date", "desc").unwrap_or_default();
-        for dl in downloads {
-            tracing::info!("[IDMM-Rust] Auto-resuming download: {}", dl.filename);
-            let req = models::StartDownloadRequest {
-                url: Some(dl.url),
-                filename: Some(dl.filename),
-                save_to: Some(dl.save_to),
-                threads: Some(dl.threads),
-                thread_mode: Some("auto".into()),
-                cookies: dl.cookies,
-                referrer: dl.referrer,
-                headers: dl.headers,
-                checksum: dl.checksum,
-                priority: None,
-            };
-            let _ = dm.start_download(req).await;
-        }
-    }
+        let settings = db.get_all_settings().unwrap_or_default();
+        let auto_resume = settings.get("auto_resume").map(|v| v == "true").unwrap_or(true);
 
-    // Auto-resume paused downloads
-    {
-        let downloads = db.list_downloads(Some("paused"), "date", "desc").unwrap_or_default();
-        for dl in downloads {
-            let settings = db.get_all_settings().unwrap_or_default();
-            let auto_resume = settings.get("auto_resume").map(|v| v == "true").unwrap_or(true);
-            if auto_resume {
-                tracing::info!("[IDMM-Rust] Auto-resuming paused download: {}", dl.filename);
-                let _ = dm.resume_download(&dl.id).await;
+        if auto_resume {
+            let mut resumed_ids: Vec<String> = Vec::new();
+            for status in ["downloading", "queued"] {
+                let downloads = db.list_downloads(Some(status), "date", "desc").unwrap_or_default();
+                for dl in downloads {
+                    if resumed_ids.iter().any(|id| id == &dl.id) {
+                        continue;
+                    }
+                    tracing::info!("[IDMM-Rust] Auto-resuming {} download: {} ({})", status, dl.filename, dl.id);
+                    // v1.4.4: RESUME the SAME record ID — no INSERT, no new
+                    // UUID, no filename dedup suffix.
+                    let result = if status == "queued" {
+                        dm.requeue_startup(&dl.id).await
+                    } else {
+                        dm.resume_download(&dl.id).await
+                    };
+                    match result {
+                        Ok(_) => resumed_ids.push(dl.id.clone()),
+                        Err((_, e)) => {
+                            tracing::warn!("[IDMM-Rust] Failed to auto-resume {}: {}", dl.id, e);
+                            let mut fields = std::collections::HashMap::<String, serde_json::Value>::new();
+                            fields.insert("status".to_string(), serde_json::json!("failed"));
+                            fields.insert("error".to_string(), serde_json::json!(format!("auto-resume failed: {}", e)));
+                            let _ = db.update_download(&dl.id, &fields);
+                        }
+                    }
+                }
             }
         }
     }
