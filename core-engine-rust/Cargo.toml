@@ -1,6 +1,6 @@
 [package]
 name = "idmm-core"
-version = "1.4.4"
+version = "1.4.5"
 edition = "2021"
 description = "IDMM Core Engine — Rust rewrite of the Node.js download engine"
 
@@ -31,3 +31,5 @@ dashmap = "6"
 opt-level = 3
 lto = true
 strip = true
+codegen-units = 1
+panic = "abort"

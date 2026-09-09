@@ -59,7 +59,7 @@ desktop.ini
 *.zip
 
 # Internal logs / temp
-QC-*.md
+QC-*.log
 FUNCTION-*.md
 graphify-out/
 test_e2e_workspace/
