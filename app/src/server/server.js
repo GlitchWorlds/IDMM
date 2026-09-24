@@ -459,17 +459,42 @@ class IDMMServer {
         // Check whether the target exists before opening
         let exists = false;
         let isDir = false;
+        let statErr = null;
         try {
           const stat = fs.statSync(filePath);
           exists = true;
           isDir = stat.isDirectory();
-        } catch {
+        } catch (err) {
           exists = false;
+          statErr = err && err.code ? err.code : null;
         }
 
-        // If the file is missing, don't open explorer — UI shows a modal instead
+        // Access denied — distinguish from missing file
+        if (statErr === 'EACCES' || statErr === 'EPERM') {
+          return res.status(403).json({ ok: false, error: 'access_denied' });
+        }
+
+        // If the file is missing, open the parent folder when it exists
         if (!exists) {
-          return res.json({ ok: true, exists: false, path: filePath });
+          const dir = require('node:path').dirname(filePath);
+          let dirExists = false;
+          try {
+            dirExists = fs.existsSync(dir);
+          } catch {
+            dirExists = false;
+          }
+          if (dirExists) {
+            const pf = process.platform;
+            if (pf === 'win32') {
+              execFile('explorer', [dir]);
+            } else if (pf === 'darwin') {
+              execFile('open', [dir]);
+            } else {
+              execFile('xdg-open', [dir]);
+            }
+            return res.json({ ok: true, exists: false, dir_exists: true, dir, path: filePath });
+          }
+          return res.json({ ok: true, exists: false, dir_exists: false, dir, path: filePath });
         }
 
         const platform = process.platform;
@@ -477,7 +502,7 @@ class IDMMServer {
           if (isDir) {
             execFile('explorer', [filePath]);
           } else {
-            execFile('explorer', ['/select,', filePath]);
+            execFile('explorer', [`/select,${filePath}`]);
           }
         } else if (platform === 'darwin') {
           execFile('open', isDir ? [filePath] : ['-R', filePath]);

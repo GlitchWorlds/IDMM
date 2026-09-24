@@ -412,4 +412,130 @@ describe('IDMM Integration Tests', function () {
       assert.equal(wp.current, beforeCurrent, 'Double-release should not change current');
     });
   });
+
+  // ---- Open-folder (IDMM UI final) ----
+
+  describe('Open-folder', function () {
+
+    before(async function () {
+      if (!server) {
+        server = new IDMMServer({ db: db, downloader: downloader });
+        await server.start();
+        await sleep(300);
+      }
+    });
+
+    after(async function () {
+      if (server) { try { await server.stop(); } catch (_) {} server = null; }
+    });
+
+    function postOpenFolder(payload) {
+      return new Promise(function (resolve, reject) {
+        var body = JSON.stringify(payload);
+        var req = http.request({
+          host: '127.0.0.1',
+          port: 9977,
+          path: '/api/open-folder',
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        }, function (res) {
+          var data = '';
+          res.on('data', function (c) { data += c; });
+          res.on('end', function () { resolve({ status: res.statusCode, body: data }); });
+        });
+        req.on('error', reject);
+        req.setTimeout(5000, function () { req.destroy(); reject(new Error('timeout')); });
+        req.write(body);
+        req.end();
+      });
+    }
+
+    function stubExecFile(calls) {
+      var cp = require('node:child_process');
+      var orig = cp.execFile;
+      cp.execFile = function (file, args) {
+        calls.push({ file: file, args: args });
+        return { pid: 99999, on: function () {}, unref: function () {} };
+      };
+      return function restore() { cp.execFile = orig; };
+    }
+
+    it('(a) win32 file-exists uses single-arg /select,<path>', async function () {
+      if (process.platform !== 'win32') { console.log('SKIP (a): not win32'); return; }
+      var f = path.join(TEST_SAVE_DIR, 'select-me.bin');
+      fs.writeFileSync(f, 'x');
+      var calls = [];
+      var restore = stubExecFile(calls);
+      try {
+        var r = await postOpenFolder({ path: f });
+        assert.equal(r.status, 200);
+        var json = JSON.parse(r.body);
+        assert.equal(json.exists, true);
+        assert.equal(calls.length, 1, 'execFile should be called once');
+        assert.equal(calls[0].file, 'explorer');
+        assert.ok(Array.isArray(calls[0].args), 'args should be array');
+        assert.equal(calls[0].args.length, 1, 'must be single argv');
+        assert.equal(calls[0].args[0], '/select,' + f);
+      } finally {
+        restore();
+        try { fs.rmSync(f, { force: true }); } catch (_) {}
+      }
+    });
+
+    it('(b) missing file + existing dir opens dir with dir_exists:true', async function () {
+      var missing = path.join(TEST_SAVE_DIR, 'gone-' + Date.now() + '.bin');
+      var calls = [];
+      var restore = stubExecFile(calls);
+      try {
+        var r = await postOpenFolder({ path: missing });
+        assert.equal(r.status, 200);
+        var json = JSON.parse(r.body);
+        assert.equal(json.exists, false);
+        assert.equal(json.dir_exists, true);
+        assert.equal(json.dir, TEST_SAVE_DIR);
+      } finally { restore(); }
+    });
+
+    it('(c) missing file + missing dir returns dir_exists:false', async function () {
+      var noDir = path.join(TEST_SAVE_DIR, 'no-such-dir-' + Date.now());
+      var missing = path.join(noDir, 'gone.bin');
+      var calls = [];
+      var restore = stubExecFile(calls);
+      try {
+        var r = await postOpenFolder({ path: missing });
+        assert.equal(r.status, 200);
+        var json = JSON.parse(r.body);
+        assert.equal(json.exists, false);
+        assert.equal(json.dir_exists, false);
+      } finally { restore(); }
+    });
+
+    it('(d) EACCES stat error returns 403 access_denied', async function () {
+      var sentinel = path.join(TEST_SAVE_DIR, 'denied-' + Date.now() + '.bin');
+      fs.writeFileSync(sentinel, 'x');
+      var fsMod = require('node:fs');
+      var origStat = fsMod.statSync;
+      fsMod.statSync = function (p) {
+        if (p === sentinel) {
+          var err = new Error('EACCES: permission denied');
+          err.code = 'EACCES';
+          throw err;
+        }
+        return origStat.call(fsMod, p);
+      };
+      var calls = [];
+      var restoreExec = stubExecFile(calls);
+      try {
+        var r = await postOpenFolder({ path: sentinel });
+        assert.equal(r.status, 403);
+        var json = JSON.parse(r.body);
+        assert.equal(json.error, 'access_denied');
+        assert.equal(calls.length, 0, 'execFile must not be called on access_denied');
+      } finally {
+        restoreExec();
+        fsMod.statSync = origStat;
+        try { fs.rmSync(sentinel, { force: true }); } catch (_) {}
+      }
+    });
+  });
 });

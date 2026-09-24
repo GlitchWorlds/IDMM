@@ -53,18 +53,20 @@ function DownloadItem({ download, onRefresh, onOpenDetail }) {
   };
   const handleOpenFolder = async () => {
     try {
-      // Kirim full path file — server mengecek keberadaan file,
-      // kalau hilang → UI tampilkan dialog "file sudah dihapus".
+      if (['active','downloading','paused','queued','waiting'].includes(status)) {
+        await openFolder(save_to);
+        return;
+      }
       const sep = (save_to || '').includes('\\') ? '\\' : '/';
-      const fullPath = save_to && filename
-        ? `${String(save_to).replace(/[\\/]+$/, '')}${sep}${filename}`
-        : save_to;
+      const fullPath = save_to && filename ? `${String(save_to).replace(/[\\/]+$/, '')}${sep}${filename}` : save_to;
       const res = await openFolder(fullPath);
-      if (res && res.exists === false) {
-        // File missing — show modal with delete-history option
+      if (res && res.exists === false && res.dir_exists === false) {
         onOpenDetail?.({ type: 'missing', download });
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      if (String(e?.message || '').includes('access_denied')) { console.error(e); return; }
+      console.error(e);
+    }
   };
 
   // Format Date Helper

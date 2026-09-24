@@ -250,7 +250,19 @@ function createTray() {
     { type: 'separator' },
     {
       label: 'Open Downloads Folder',
-      click: () => shell.openPath(DEFAULT_SAVE_PATH),
+      click: async () => {
+        let p = DEFAULT_SAVE_PATH;
+        try {
+          if (db) {
+            const r = db.getSetting('default_save_path');
+            if (r && r.ok && r.data) p = r.data;
+          }
+        } catch {}
+        try {
+          if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+        } catch {}
+        await shell.openPath(p);
+      },
     },
     {
       label: 'Open Web UI',
