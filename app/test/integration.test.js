@@ -87,8 +87,7 @@ describe('IDMM Integration Tests', function () {
       db: db,
       tempDir: TEST_TEMP_DIR,
       settings: {
-        default_threads: '2',
-        default_thread_mode: 'manual',
+        max_threads_per_download: '8',
         default_save_path: TEST_SAVE_DIR,
         max_concurrent_downloads: '5',
         retry_count: '1',
@@ -377,7 +376,7 @@ describe('IDMM Integration Tests', function () {
     // Fix #12: DB error propagation pattern
     it('All DB methods return { ok, data/error } consistently', function () {
       // getSetting
-      var setting = db.getSetting('default_threads');
+      var setting = db.getSetting('max_threads_per_download');
       assert.ok(setting.ok, 'getSetting should return ok');
       assert.ok(setting.data, 'getSetting should return data');
 

@@ -4,7 +4,8 @@ import Header from './components/Header';
 import DownloadList from './components/DownloadList';
 import Settings from './components/Settings';
 import useWebSocket from './hooks/useWebSocket';
-import { getDownloads, getStats, deleteDownload, formatBytes as formatSize } from './api';
+import SpeedGraph from './components/SpeedGraph';
+import { getDownloads, getStats, deleteDownload, addDownload, formatBytes as formatSize } from './api';
 
 export default function App() {
   const [downloads, setDownloads] = useState([]);
@@ -17,6 +18,11 @@ export default function App() {
   const [pendingFilter, setPendingFilter] = useState(null);
   const saveRef = useRef(null);
   const [speedHistory, setSpeedHistory] = useState([]);
+  // Add URL control state
+  const [addUrlOpen, setAddUrlOpen] = useState(false);
+  const [addUrlValue, setAddUrlValue] = useState('');
+  const [addUrlError, setAddUrlError] = useState('');
+  const [addUrlBusy, setAddUrlBusy] = useState(false);
   // Completed sort state
   const [sortKey, setSortKey] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
@@ -156,6 +162,28 @@ export default function App() {
     }
   };
 
+  const handleAddUrl = async (e) => {
+    e?.preventDefault?.();
+    const url = (addUrlValue || '').trim();
+    if (!url) {
+      setAddUrlError('URL is required');
+      return;
+    }
+    setAddUrlBusy(true);
+    setAddUrlError('');
+    try {
+      await addDownload(url);
+      setAddUrlValue('');
+      setAddUrlOpen(false);
+      setAddUrlError('');
+      await handleRefresh();
+    } catch (err) {
+      setAddUrlError(err.message || 'Failed to add download');
+    } finally {
+      setAddUrlBusy(false);
+    }
+  };
+
   const handleFilterChange = useCallback((filterKey) => {
     if (filterKey === 'settings') {
       themeOnEnterRef.current = theme;
@@ -270,10 +298,31 @@ export default function App() {
         <Header
           search={search}
           onSearchChange={setSearch}
-          totalSpeed={stats.totalSpeed}
+          totalSpeed={speedHistory.length > 0 ? speedHistory[speedHistory.length - 1].speed : (stats.totalSpeed || 0)}
           activeCount={stats.active}
           completedCount={stats.completed}
+          onAddUrl={() => {
+            setAddUrlError('');
+            setAddUrlOpen((v) => !v);
+          }}
         />
+        <AddUrlBar
+          open={addUrlOpen}
+          value={addUrlValue}
+          onChange={setAddUrlValue}
+          onSubmit={handleAddUrl}
+          onClose={() => {
+            setAddUrlOpen(false);
+            setAddUrlError('');
+          }}
+          error={addUrlError}
+          busy={addUrlBusy}
+        />
+        {stats.active > 0 && speedHistory.length > 1 && (
+          <div className="px-6 pt-4">
+            <SpeedGraph mini data={speedHistory} />
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto p-6">
           <DownloadList
             downloads={sorted}
@@ -428,5 +477,45 @@ function ConfirmLeaveModal({ onSave, onDiscard, onCancel }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function AddUrlBar({ open, value, onChange, onSubmit, onClose, error, busy }) {
+  if (!open) return null;
+  const showError = !!error;
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="px-6 pt-4 flex items-center gap-2"
+      style={{ WebkitAppRegion: 'no-drag' }}
+    >
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Paste a download URL (http/https)..."
+        autoFocus
+        className={`flex-1 surface border rounded-lg px-3 py-2 text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 transition-all ${
+          showError ? 'border-red-500/60 focus:ring-red-500/40' : 'border-theme focus:ring-accent/50 focus:border-accent'
+        }`}
+      />
+      <button
+        type="submit"
+        disabled={busy}
+        className="px-4 py-2 rounded-lg text-sm font-medium bg-accent-dim text-white hover:bg-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+      >
+        {busy ? 'Adding...' : 'Add Download'}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        className="px-3 py-2 rounded-lg text-sm font-medium surface border border-theme text-muted hover:text-main hover:bg-surface-hover transition-colors whitespace-nowrap"
+      >
+        Cancel
+      </button>
+      {showError && (
+        <div className="text-xs text-red-400 whitespace-nowrap">{error}</div>
+      )}
+    </form>
   );
 }

@@ -110,7 +110,6 @@ const IDMM_API = {
    * Key mapping: extension camelCase  server snake_case.
    */
   _LOCAL_TO_SERVER: {
-    maxThreads: 'default_threads',
     defaultSavePath: 'default_save_path',
     interceptMinSize: 'intercept_min_size',
     interceptAll: 'intercept_all',
@@ -122,7 +121,6 @@ const IDMM_API = {
   },
 
   _SERVER_TO_LOCAL: {
-    default_threads: 'maxThreads',
     default_save_path: 'defaultSavePath',
     intercept_min_size: 'interceptMinSize',
     intercept_all: 'interceptAll',
@@ -240,7 +238,6 @@ const IDMM_API = {
   defaultSettings() {
     return {
       enabled: true,
-      maxThreads: 8,
       defaultSavePath: '',
       interceptMinSize: 0, // Intercept all downloads regardless of size
       interceptAll: true, // Intercept all file types

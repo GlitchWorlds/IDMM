@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { formatSpeed } from '../api';
 
-function Header({ search, onSearchChange, totalSpeed, activeCount, completedCount }) {
+function Header({ search, onSearchChange, totalSpeed, activeCount, completedCount, onAddUrl }) {
   return (
     <header className="base-bg border-b border-theme px-6 py-3 shrink-0 flex-none" style={{ paddingRight: '140px', WebkitAppRegion: 'drag' }}>
       <div className="flex items-center gap-4" style={{ WebkitAppRegion: 'no-drag' }}>
@@ -18,6 +18,20 @@ function Header({ search, onSearchChange, totalSpeed, activeCount, completedCoun
             className="w-full surface border border-theme rounded-lg pl-10 pr-4 py-2 text-sm text-main placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
           />
         </div>
+
+        {/* Add URL */}
+        {onAddUrl && (
+          <button
+            onClick={onAddUrl}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-accent-dim text-white hover:bg-accent transition-colors whitespace-nowrap"
+            title="Add a download by URL"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add URL
+          </button>
+        )}
 
         {/* Speed Indicator */}
         {totalSpeed > 0 && (

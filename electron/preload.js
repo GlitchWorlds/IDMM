@@ -4,7 +4,7 @@ const path = require('node:path');
 // E-10: Read version from package.json instead of hardcoding
 let appVersion = '0.0.0';
 try {
-  appVersion = require(path.join(__dirname, '..', 'package.json')).version || appVersion;
+  appVersion = require(path.join(__dirname, 'package.json')).version || appVersion;
 } catch {
   // Fallback if package.json not found
   appVersion = process.env.npm_package_version || '0.0.0';

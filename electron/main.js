@@ -285,7 +285,7 @@ app.whenReady().then(async () => {
     createTray();
 
     // Clipboard monitor — auto-detect URLs copied to clipboard
-    const clipMonitor = new ClipboardMonitor({ interval: 2000, cooldown: 10000 });
+    const clipMonitor = new ClipboardMonitor({ pollIntervalMs: 2000, cooldownMs: 10000 });
     clipMonitor.on('url-detected', (url) => {
       if (downloader) {
         downloader.startDownload(url).catch(err => console.error('[Clipboard]', err.message));
