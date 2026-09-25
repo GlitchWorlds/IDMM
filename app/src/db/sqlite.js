@@ -206,6 +206,7 @@ class IDMMDatabase {
       intercept_archive: 'true',
       intercept_software: 'true',
       intercept_document: 'true',
+      auto_start: 'false',
     };
 
     for (const [key, value] of Object.entries(defaults)) {

@@ -9,7 +9,7 @@ const THEME_OPTIONS = [
 ];
 
 export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, saveRef }) {
-  const [settings, setSettings] = useState({ savePath: '' });
+  const [settings, setSettings] = useState({ savePath: '', autoStart: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -23,6 +23,7 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
           setSettings((prev) => ({
             ...prev,
             savePath: s.default_save_path ?? prev.savePath,
+            autoStart: s.auto_start === 'true' || s.auto_start === true,
           }));
         }
       })
@@ -46,9 +47,14 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
     setSaved(false);
     try {
       const payload = {
-        default_save_path: settings.savePath || '',
+        default_save_path: settings.savePath || '', 
+        auto_start: settings.autoStart ? 'true' : 'false',
       };
       await updateSettings(payload);
+      // Sync Windows registry autostart (Electron main via preload bridge)
+      if (window.idmm && window.idmm.setAutoStart) {
+        await window.idmm.setAutoStart(settings.autoStart);
+      }
       setSaved(true);
       isDirtyRef.current = false;
       if (onDirtyChange) onDirtyChange(false);
@@ -166,7 +172,18 @@ export default function Settings({ onBack, theme, onThemeChange, onDirtyChange, 
           </div>
         </div>
 
-        {/* Save Button */}
+        {/* Auto-start Toggle */}
+<div className="surface rounded-xl p-5 border border-theme">
+<label className="block text-sm font-medium text-main mb-2">Auto-start</label>
+<p className="text-xs text-muted mb-3">Launch IDMM on Windows login</p>
+<button
+type="button"
+onClick={() => updateSetting('autoStart', !settings.autoStart)}
+className="px-4 py-2.5 rounded-lg text-sm border border-theme">
+{settings.autoStart ? 'On' : 'Off'}
+</button>
+</div>
+{/* Save Button */}
         <div className="flex justify-end gap-3 pt-2">
           <button
             onClick={onBack}

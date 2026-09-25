@@ -415,7 +415,7 @@ class IDMMServer {
           'speed_limit_global', 'auto_resume', 'auto_categorize', 'intercept_all',
           // Extension sync: intercept rules
           'intercept_min_size', 'intercept_video', 'intercept_audio',
-          'intercept_archive', 'intercept_software', 'intercept_document',
+          'intercept_archive', 'intercept_software', 'intercept_document', 'auto_start',
         ];
 
         const filtered = {};

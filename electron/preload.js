@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('idmm', {
   version: appVersion,
   apiUrl: 'http://127.0.0.1:9977',
   selectFolder: () => ipcRenderer.invoke('dialog:selectFolder'),
+  setAutoStart: (enabled) => ipcRenderer.invoke('autostart:set', !!enabled),
+  getAutoStart: () => ipcRenderer.invoke('autostart:get'),
   getTheme: () => ipcRenderer.invoke('theme:get'),
   setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
 });

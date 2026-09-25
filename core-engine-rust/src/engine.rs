@@ -590,7 +590,7 @@ impl DownloadManager {
             "default_save_path", "temp_dir", "retry_count", "timeout_ms",
             "speed_limit_global", "auto_resume", "auto_categorize", "intercept_all",
             "intercept_min_size", "intercept_video", "intercept_audio",
-            "intercept_archive", "intercept_software", "intercept_document",
+            "intercept_archive", "intercept_software", "intercept_document", "auto_start",
         ];
         let mut filtered = HashMap::new();
         for (k, v) in updates {

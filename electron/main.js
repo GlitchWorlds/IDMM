@@ -147,6 +147,22 @@ function applyThemeToWindow(win, theme) {
 
 //  Window 
 
+//  Auto-start (HKCU Run registry)
+const AUTOSTART_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+function setAutoStartEnabled(enabled) {
+  if (process.platform !== 'win32') return Promise.resolve({ ok: true, skipped: true });
+  const { execFile } = require('node:child_process');
+  const exePath = process.execPath;
+  return new Promise((resolve) => {
+    const done = (err) => resolve({ ok: !err, error: err ? err.message : null });
+    if (enabled) {
+      execFile('reg', ['add', AUTOSTART_KEY, '/v', 'IDMM', '/t', 'REG_SZ', '/d', `"${exePath}"`, '/f'], (err) => done(err));
+    } else {
+      execFile('reg', ['delete', AUTOSTART_KEY, '/v', 'IDMM', '/f'], (err) => done(err));
+    }
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1000,
@@ -293,6 +309,12 @@ function createTray() {
 app.whenReady().then(async () => {
   try {
     await startServer();
+    // Apply registry autostart from persisted setting (YAGNI reconcile)
+    try {
+      const r = db && db.getSetting ? db.getSetting('auto_start') : null;
+      const enabled = r && r.ok && r.data === 'true';
+      await setAutoStartEnabled(!!enabled);
+    } catch (e) { console.error('[IDMM] autostart reconcile failed:', e.message); }
     createWindow();
     createTray();
 
@@ -365,6 +387,17 @@ ipcMain.handle('dialog:selectFolder', async () => {
 });
 
 ipcMain.handle('theme:get', () => loadTheme());
+
+ipcMain.handle('autostart:set', (event, enabled) => setAutoStartEnabled(!!enabled));
+ipcMain.handle('autostart:get', async () => {
+  if (process.platform !== 'win32') return { enabled: false, skipped: true };
+  const { execFile } = require('node:child_process');
+  return new Promise((resolve) => {
+    execFile('reg', ['query', AUTOSTART_KEY, '/v', 'IDMM'], (err) => {
+      resolve({ enabled: !err });
+    });
+  });
+});
 
 ipcMain.handle('theme:set', (event, theme) => {
   saveTheme(theme);

@@ -103,6 +103,7 @@ impl Database {
             ("intercept_archive", "true".into()),
             ("intercept_software", "true".into()),
             ("intercept_document", "true".into()),
+            ("auto_start", "false".into()),
         ];
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         for (key, value) in defaults {
