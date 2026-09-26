@@ -19,20 +19,10 @@ async fn select_folder(app: tauri::AppHandle) -> Result<Option<String>, String> 
     }
 }
 
-#[tauri::command]
-fn set_autostart(enabled: bool) -> Result<String, String> {
-    #[cfg(target_os = "windows")] {
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let exe_s = exe.to_string_lossy().into_owned();
-        let status = if enabled {
-            std::process::Command::new("reg").args(["add", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "IDMM", "/t", "REG_SZ", "/d", &format!("\"{}\"", exe_s), "/f"]).status().map_err(|e| e.to_string())?
-        } else {
-            std::process::Command::new("reg").args(["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run", "/v", "IDMM", "/f"]).status().map_err(|e| e.to_string())?
-        };
-        if status.success() { return Ok("ok".into()); } else { return Err("reg command failed".into()); }
-    }
-    #[cfg(not(target_os = "windows"))] { Ok("skipped".into()) }
-}
+// P7 IDMM: Tauri autostart DISABLED - single source is Electron HKCU-Run (electron/main.js setAutoStartEnabled).
+// Reason: avoid dual HKCU Run writers racing on same IDMM value; Electron owns autostart + single-instance reconcile.
+// set_autostart Tauri command removed from invoke_handler; frontend shim below is no-op stub.
+// Original fn preserved in main.rs.bak-20260926-qc2020 - DO NOT re-enable without removing Electron source.
 
 fn main() {
     const INIT_SCRIPT: &str = r#"
@@ -53,7 +43,7 @@ fn main() {
             getTheme: async function() {
                 try { return localStorage.getItem('idmm-theme') || 'dark'; } catch { return 'dark'; }
             },
-            setAutoStart: async function(enabled) { try { if (window.__TAURI__ && window.__TAURI__.core) { return await window.__TAURI__.core.invoke('set_autostart', { enabled: !!enabled }); } } catch (e) { console.error(e); } return null; },
+            setAutoStart: async function(enabled) { console.warn('[IDMM] Tauri autostart disabled; single source Electron HKCU-Run'); return { ok: false, disabled: true }; },
             setTheme: async function(theme) {
                 try { localStorage.setItem('idmm-theme', theme); } catch {}
             },
@@ -70,7 +60,7 @@ fn main() {
             }
         }))
         .manage(SidecarHandle(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![select_folder, set_autostart])
+        .invoke_handler(tauri::generate_handler![select_folder]) // P7: Tauri autostart removed - single source Electron HKCU-Run
         .setup(|app| {
             let app_exe = std::env::current_exe().expect("failed to get current exe path");
             let app_dir = app_exe.parent().expect("failed to get exe parent dir");

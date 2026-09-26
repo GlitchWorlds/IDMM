@@ -24,7 +24,7 @@ const APP_DIR = __dirname;
 const LEGACY_DATA_DIR = path.join(os.homedir(), '.idmam');
 const DATA_DIR = path.join(os.homedir(), '.idmm');
 const DB_PATH = path.join(DATA_DIR, 'idmm.db');
-const TEMP_DIR = path.join(DATA_DIR, 'temp');
+const TEMP_DIR = path.join(DATA_DIR, 'temp-node'); // P14 Node temp pisah dari Rust
 const DEFAULT_SAVE_PATH = path.join(os.homedir(), 'Downloads', 'IDMM');
 
 //  Data Migration (.idmam  .idmm) 

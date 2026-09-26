@@ -193,7 +193,7 @@ class IDMMDatabase {
       max_concurrent_downloads: '5',
       max_threads_per_download: '128',
       default_save_path: path.join(require('node:os').homedir(), 'Downloads', 'IDMM'),
-      temp_dir: path.join(require('node:os').homedir(), '.idmm', 'temp'),
+      temp_dir: path.join(require('node:os').homedir(), '.idmm', 'temp-node'),
       retry_count: '3',
       timeout_ms: '30000',
       speed_limit_global: '0',

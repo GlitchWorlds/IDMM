@@ -35,7 +35,7 @@ const IDMMServer = require(path.join(APP_DIR, 'src', 'server', 'server'));
 
 const DATA_DIR = path.join(os.homedir(), '.idmm');
 const DB_PATH = path.join(DATA_DIR, 'idmm.db');
-const TEMP_DIR = path.join(DATA_DIR, 'temp');
+const TEMP_DIR = path.join(DATA_DIR, 'temp-node'); // P14 Node temp pisah dari Rust
 const DEFAULT_SAVE_PATH = path.join(os.homedir(), 'Downloads', 'IDMM');
 const UI_DEV_URL = 'http://localhost:5174';
 const UI_PROD_PATH = path.join(__dirname, 'ui', 'build', 'index.html');
