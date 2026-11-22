@@ -87,42 +87,11 @@ fn main() {
         .manage(SidecarHandle(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![select_folder, set_autostart])
         .setup(|app| {
-            let app_exe = std::env::current_exe().expect("failed to get current exe path");
-            let app_dir = app_exe.parent().expect("failed to get exe parent dir");
-
-            // Collect candidate paths for idmm-core.exe
-            let mut candidates: Vec<std::path::PathBuf> = vec![
-                app_dir.join("resources").join("idmm-core.exe"),
-                app_dir.join("idmm-core.exe"),
-                std::path::PathBuf::from("D:/IDMM/core-engine-rust/target/release/idmm-core.exe"),
-            ];
-
-            // Also try Tauri resource dir
-            if let Ok(resource_dir) = app.path().resource_dir() {
-                candidates.insert(0, resource_dir.join("idmm-core.exe"));
-            }
-
-            let exe_path = candidates
-                .iter()
-                .find(|p| p.exists())
-                .expect("idmm-core.exe not found. Place it next to the app exe or in resources/.");
-
-            eprintln!("[IDMM] Starting core engine from: {:?}", exe_path);
-
-            let mut cmd = std::process::Command::new(exe_path);
-            #[cfg(target_os = "windows")]
-            {
-                use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-            }
-
-            let child = cmd
-                .spawn()
-                .expect("failed to start idmm-core.exe");
-
-            let handle = app.state::<SidecarHandle>();
-            *handle.0.lock().unwrap() = Some(child);
-            eprintln!("[IDMM] Core engine started on 127.0.0.1:9977");
+            // Start embedded Rust download engine in an async background task
+            tauri::async_runtime::spawn(async move {
+                eprintln!("[IDMM] Launching in-process core download engine...");
+                idmm_core::start_embedded_core().await;
+            });
 
             // Create Tray Menu
             let quit_i = MenuItem::with_id(app, "quit", "Quit IDMM", true, None::<&str>)?;
@@ -192,16 +161,5 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|app_handle, event| {
-            if let RunEvent::Exit = event {
-                eprintln!("[IDMM] Shutting down core engine...");
-                let handle = app_handle.state::<SidecarHandle>();
-                let mut guard = handle.0.lock().unwrap();
-                if let Some(ref mut child) = *guard {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    eprintln!("[IDMM] Core engine stopped.");
-                }
-            }
-        });
+        .run(|_app_handle, _event| {});
 }
