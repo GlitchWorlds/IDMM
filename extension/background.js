@@ -96,14 +96,24 @@ async function sendToIDMM({ url, filename, cookies, referrer, userAgent }) {
   }
 }
 
-async function getTabCookies(url, tab) {
-  if (!url) return '';
-  try {
-    const cookieList = await chrome.cookies.getAll({ url });
-    return cookieList.map(c => `${c.name}=${c.value}`).join('; ');
-  } catch {
-    return '';
+async function getCompleteCookies(url, referrer) {
+  const cookieMap = new Map();
+  const urlsToQuery = [];
+  if (url) urlsToQuery.push(url);
+  if (referrer && referrer !== url) urlsToQuery.push(referrer);
+
+  for (const targetUrl of urlsToQuery) {
+    try {
+      const list = await chrome.cookies.getAll({ url: targetUrl });
+      for (const c of list) {
+        cookieMap.set(c.name, c.value);
+      }
+    } catch {}
   }
+
+  return Array.from(cookieMap.entries())
+    .map(([k, v]) => `${k}=${v}`)
+    .join('; ');
 }
 
 // ── Intercept Download Browser (fallback untuk download JS-initiated) ──
@@ -128,14 +138,15 @@ chrome.downloads.onCreated.addListener(async (item) => {
   } catch {}
 
   const url = item.finalUrl || item.url;
-  const cookies = item.cookie || '';
   const referrer = item.referrer || '';
+  const cookies = await getCompleteCookies(url, referrer);
 
   await sendToIDMM({
     url,
     filename: item.filename,
     cookies,
     referrer,
+    userAgent: navigator.userAgent,
   });
 });
 
@@ -164,11 +175,16 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
     });
   } catch {}
 
-  const sent = await sendToIDMM({
-    url: item.finalUrl || item.url,
+  const url = item.finalUrl || item.url;
+  const referrer = item.referrer || '';
+  const cookies = await getCompleteCookies(url, referrer);
+
+  await sendToIDMM({
+    url,
     filename: item.filename,
-    cookies: item.cookie || '',
-    referrer: item.referrer || '',
+    cookies,
+    referrer,
+    userAgent: navigator.userAgent,
   });
 
   suggest();
@@ -223,8 +239,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   if (!url) return;
 
-  const cookies = await getTabCookies(url, tab);
-  const sent = await sendToIDMM({ url, cookies, referrer: tab?.url || '' });
+  const cookies = await getCompleteCookies(url, tab?.url || '');
+  const sent = await sendToIDMM({
+    url,
+    cookies,
+    referrer: tab?.url || '',
+    userAgent: navigator.userAgent,
+  });
 
   if (sent.ok) {
     try {
@@ -266,13 +287,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!online) {
           return { ok: false, error: 'IDMM server offline. Buka aplikasi IDMM dulu.' };
         }
-        const cookies = await getTabCookies(message.downloadInfo?.url, sender.tab);
+        const dlUrl = message.downloadInfo?.url;
+        const dlRef = message.downloadInfo?.referrer || sender.tab?.url || '';
+        const cookies = await getCompleteCookies(dlUrl, dlRef);
         const sent = await sendToIDMM({
-          url: message.downloadInfo?.url,
+          url: dlUrl,
           filename: message.downloadInfo?.filename,
           cookies: message.downloadInfo?.cookies || cookies,
-          referrer: message.downloadInfo?.referrer || sender.tab?.url || '',
-          userAgent: message.downloadInfo?.userAgent || '',
+          referrer: dlRef,
+          userAgent: message.downloadInfo?.userAgent || navigator.userAgent,
         });
         return sent;
       }

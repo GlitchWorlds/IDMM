@@ -318,7 +318,15 @@ impl DownloadManager {
 
         tokio::spawn(async move {
             let result = if probe.accepts_ranges && probe.content_length > 0 {
-                self_clone.run_chunked_download(&state_clone, &headers_clone, retry_count, timeout_ms, speed_limit).await
+                let chunk_res = self_clone.run_chunked_download(&state_clone, &headers_clone, retry_count, timeout_ms, speed_limit).await;
+                match chunk_res {
+                    Ok(()) => Ok(()),
+                    Err(ref e) if e.contains("NO_RANGE_SUPPORT") || e.contains("failed after") || e.contains("Unexpected HTTP") => {
+                        eprintln!("[IDMM] Chunked download failed ({}), falling back to single stream...", e);
+                        self_clone.run_single_stream_download(&state_clone, &headers_clone, retry_count, timeout_ms, speed_limit).await
+                    }
+                    Err(e) => Err(e),
+                }
             } else {
                 self_clone.run_single_stream_download(&state_clone, &headers_clone, retry_count, timeout_ms, speed_limit).await
             };
@@ -466,7 +474,15 @@ impl DownloadManager {
                 // Never-started (queued) download — probe and start fresh
                 self_clone.run_queued_from_scratch(&state_clone, &request_headers, retry_count, timeout_ms, speed_limit).await
             } else if state_clone.chunks.len() > 1 {
-                self_clone.run_chunked_download(&state_clone, &request_headers, retry_count, timeout_ms, speed_limit).await
+                let chunk_res = self_clone.run_chunked_download(&state_clone, &request_headers, retry_count, timeout_ms, speed_limit).await;
+                match chunk_res {
+                    Ok(()) => Ok(()),
+                    Err(ref e) if e.contains("NO_RANGE_SUPPORT") || e.contains("failed after") || e.contains("Unexpected HTTP") => {
+                        eprintln!("[IDMM] Chunked resume failed ({}), falling back to single stream...", e);
+                        self_clone.run_single_stream_download(&state_clone, &request_headers, retry_count, timeout_ms, speed_limit).await
+                    }
+                    Err(e) => Err(e),
+                }
             } else {
                 self_clone.run_single_stream_download(&state_clone, &request_headers, retry_count, timeout_ms, speed_limit).await
             };
