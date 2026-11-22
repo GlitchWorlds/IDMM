@@ -1,0 +1,96 @@
+{
+  "name": "idmm-desktop",
+  "version": "1.4.6",
+  "description": "IDMM - Internet Download Manager Max",
+  "author": "IDMM",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"cd ../app && node main.js\" \"electron . --dev\"",
+    "prebuild": "node -e \"const fs=require('fs');fs.rmSync('app-engine',{recursive:true,force:true});fs.cpSync('../app/src','app-engine/src',{recursive:true});fs.copyFileSync('../app/package.json','app-engine/package.json')\"",
+    "build": "npm run prebuild && electron-builder --win",
+    "postbuild": "node -e \"require('fs').rmSync('app-engine',{recursive:true,force:true})\"",
+    "build:portable": "electron-builder --win portable",
+    "dist": "npm run prebuild && electron-builder --win --config"
+  },
+  "build": {
+    "appId": "com.idmm.desktop",
+    "productName": "IDMM",
+    "copyright": "Copyright  2026 IDMM",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "clipboard-monitor.js",
+      "installer.nsh",
+      "assets/**/*",
+      "app-engine/**/*",
+      "ui/build/**/*",
+      "node_modules/**/*"
+    ],
+    "asar": false,
+    "extraResources": [
+      {
+        "from": "../extension",
+        "to": "extension"
+      },
+      {
+        "from": "resources/scripts/inject-extension.ps1",
+        "to": "scripts/inject-extension.ps1"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "IDMM",
+      "include": "installer.nsh",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "warningsAsErrors": false
+    }
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "helmet": "8.3.0",
+    "sql.js": "^1.14.1",
+    "uuid": "^14.0.1",
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.4",
+    "electron": "^43.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

@@ -1,0 +1,70 @@
+﻿# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+target/
+**/target/
+ui-dist/
+**/ui-dist/
+src-tauri/gen/
+**/src-tauri/gen/
+src-tauri/binaries/
+**/src-tauri/binaries/
+src-tauri/resources/idmm-core.exe
+**/src-tauri/resources/idmm-core.exe
+
+# Electron
+electron/dist/
+electron/ui/build/
+electron/app-engine/
+
+# Database
+*.db
+*.sqlite
+
+# Logs
+*.log
+npm-debug.log*
+download.json
+server_*.txt
+*.txt.bak
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Cache
+.cache/
+*.tgz
+*.tar.gz
+
+# Build artifacts
+*.zip
+
+# Internal logs / temp
+QC-*.log
+FUNCTION-*.md
+graphify-out/
+test_e2e_workspace/
+*-error.txt
+cargo-stderr.txt
+
+# Backup files
+*.bak-*

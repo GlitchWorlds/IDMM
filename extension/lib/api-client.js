@@ -1,0 +1,434 @@
+/**
+ * IDMM API Client  shared between popup, background, and options.
+ * Handles all communication with the IDMM desktop app server.
+ */
+
+const IDMM_API = {
+  BASE_URL: 'http://127.0.0.1:9977',
+  TIMEOUT: 5000,
+
+  async _fetch(path, options = {}) {
+    const baseUrl = IDMM_API.BASE_URL;
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), IDMM_API.TIMEOUT);
+
+      const response = await fetch(`${baseUrl}${path}`, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+
+      return response.json();
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('IDMM server timeout');
+      }
+      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        throw new Error('IDMM server offline');
+      }
+      throw err;
+    }
+  },
+
+  //  Downloads 
+
+  async startDownload({ url, filename, cookies, referrer, userAgent, threads, save_to, headers }) {
+    // Merge userAgent into headers
+    const reqHeaders = { ...(headers || {}) };
+    if (userAgent) reqHeaders['User-Agent'] = userAgent;
+
+    return IDMM_API._fetch('/api/download', {
+      method: 'POST',
+      body: JSON.stringify({ url, filename, cookies, referrer, threads, save_to, headers: reqHeaders }),
+    });
+  },
+
+  async listDownloads(status) {
+    const query = status ? `?status=${status}` : '';
+    return IDMM_API._fetch(`/api/downloads${query}`);
+  },
+
+  async getDownload(id) {
+    return IDMM_API._fetch(`/api/download/${id}`);
+  },
+
+  async pauseDownload(id) {
+    return IDMM_API._fetch(`/api/download/${id}/pause`, { method: 'POST' });
+  },
+
+  async resumeDownload(id) {
+    return IDMM_API._fetch(`/api/download/${id}/resume`, { method: 'POST' });
+  },
+
+  async cancelDownload(id) {
+    return IDMM_API._fetch(`/api/download/${id}/cancel`, { method: 'POST' });
+  },
+
+  async deleteDownload(id) {
+    return IDMM_API._fetch(`/api/download/${id}`, { method: 'DELETE' });
+  },
+
+  async getServerStats() {
+    return IDMM_API._fetch('/api/stats');
+  },
+
+  async openFolder(filePath) {
+    return IDMM_API._fetch('/api/open-folder', {
+      method: 'POST',
+      body: JSON.stringify({ path: filePath }),
+    });
+  },
+
+  async healthCheck() {
+    try {
+      const baseUrl = IDMM_API.BASE_URL;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${baseUrl}/api/health`, { signal: controller.signal });
+      clearTimeout(timeout);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  //  Settings (Server SSOT + local cache) 
+
+  /**
+   * Key mapping: extension camelCase  server snake_case.
+   */
+  _LOCAL_TO_SERVER: {
+    defaultSavePath: 'default_save_path',
+    interceptMinSize: 'intercept_min_size',
+    interceptAll: 'intercept_all',
+    interceptVideo: 'intercept_video',
+    interceptAudio: 'intercept_audio',
+    interceptArchive: 'intercept_archive',
+    interceptSoftware: 'intercept_software',
+    interceptDocument: 'intercept_document',
+  },
+
+  _SERVER_TO_LOCAL: {
+    default_save_path: 'defaultSavePath',
+    intercept_min_size: 'interceptMinSize',
+    intercept_all: 'interceptAll',
+    intercept_video: 'interceptVideo',
+    intercept_audio: 'interceptAudio',
+    intercept_archive: 'interceptArchive',
+    intercept_software: 'interceptSoftware',
+    intercept_document: 'interceptDocument',
+  },
+
+  /**
+   * Map server snake_case settings to extension camelCase.
+   */
+  _mapServerToLocal(serverSettings) {
+    const local = {};
+    for (const [serverKey, localKey] of Object.entries(IDMM_API._SERVER_TO_LOCAL)) {
+      const val = serverSettings[serverKey];
+      if (val !== undefined) {
+        // Boolean-ish values from SQLite
+        if (typeof val === 'string' && (val === 'true' || val === 'false')) {
+          local[localKey] = val === 'true';
+        } else {
+          local[localKey] = val;
+        }
+      }
+    }
+    return local;
+  },
+
+  /**
+   * Map extension camelCase settings to server snake_case.
+   */
+  _mapLocalToServer(localSettings) {
+    const server = {};
+    for (const [localKey, serverKey] of Object.entries(IDMM_API._LOCAL_TO_SERVER)) {
+      const val = localSettings[localKey];
+      if (val !== undefined) {
+        server[serverKey] = typeof val === 'boolean' ? String(val) : val;
+      }
+    }
+    return server;
+  },
+
+  /**
+   * Get settings: server-first with local cache fallback.
+   * Extension-only settings (enabled) always from local.
+   */
+  async getSettings() {
+    const defaults = IDMM_API.defaultSettings();
+
+    // Get extension-only settings from local
+    const localOnly = await new Promise((resolve) => {
+      chrome.storage.local.get('idmm_settings', (result) => {
+        const s = result.idmm_settings || {};
+        resolve({
+          enabled: s.enabled !== undefined ? s.enabled : defaults.enabled,
+        });
+      });
+    });
+
+    try {
+      // Fetch shared settings from server (SSOT)
+      const serverSettings = await IDMM_API._fetch('/api/settings');
+      const mapped = IDMM_API._mapServerToLocal(serverSettings);
+
+      // Merge: server shared + local-only
+      const merged = { ...defaults, ...mapped, ...localOnly };
+
+      // Cache to local for offline fallback
+      await IDMM_API._cacheLocal(merged);
+
+      return merged;
+    } catch {
+      // Server offline  use full local cache
+      return new Promise((resolve) => {
+        chrome.storage.local.get('idmm_settings', (result) => {
+          resolve({ ...defaults, ...result.idmm_settings, ...localOnly });
+        });
+      });
+    }
+  },
+
+  /**
+   * Save settings: dual-write to server + local cache.
+   */
+  async saveSettings(settings) {
+    // Always cache locally (offline resilience)
+    await IDMM_API._cacheLocal(settings);
+
+    // Map to server keys and push
+    const serverPayload = IDMM_API._mapLocalToServer(settings);
+    try {
+      await IDMM_API._fetch('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify(serverPayload),
+      });
+    } catch {
+      // Server offline  local cache saved, will sync on next save
+      console.warn('[IDMM] Server offline, settings cached locally only');
+    }
+  },
+
+  /**
+   * Cache settings to chrome.storage.local.
+   */
+  async _cacheLocal(settings) {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ idmm_settings: settings }, resolve);
+    });
+  },
+
+  /**
+   * Default settings object.
+   */
+  defaultSettings() {
+    return {
+      enabled: true,
+      defaultSavePath: '',
+      interceptMinSize: 0, // Intercept all downloads regardless of size
+      interceptAll: true, // Intercept all file types
+      interceptVideo: true,
+      interceptAudio: true,
+      interceptArchive: true,
+      interceptSoftware: true,
+      interceptDocument: true,
+    };
+  },
+
+  //  File Type Detection 
+
+  // IDM Standard Download Extensions
+  DOWNLOAD_EXTENSIONS: new Set([
+    // Media & Video/Audio
+    '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mpg', '.mpeg', '.m4v', '.3gp', '.ts', '.vob',
+    '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus', '.mid', '.midi',
+    // Archives & Compressed
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.zst', '.iso', '.tgz', '.tbz2', '.cab', '.dmg',
+    // Documents & E-books
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp',
+    '.epub', '.mobi', '.cbz', '.cbr',
+    // Executables & Installers
+    '.exe', '.msi', '.pkg', '.deb', '.rpm', '.apk', '.ipa', '.appx', '.appxbundle', '.appimage', '.bin',
+    // Disk Images & System
+    '.img', '.vhd', '.vhdx', '.vmdk',
+    // Developer & Packages
+    '.dll', '.so', '.dylib', '.whl', '.jar', '.nupkg', '.crx', '.xpi',
+    // Fonts (when downloaded directly)
+    '.ttf', '.otf', '.woff', '.woff2',
+  ]),
+
+  // File types that should NEVER be automatically intercepted (navigation, web assets, scripts, trackers)
+  IGNORED_EXTENSIONS: new Set([
+    '.html', '.htm', '.xhtml', '.php', '.asp', '.aspx', '.jsp', '.jspx', '.action', '.do',
+    '.css', '.js', '.mjs', '.jsx', '.ts', '.tsx', '.json', '.xml', '.rss', '.atom',
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp', '.tif', '.tiff',
+    '.map', '.txt', '.log',
+  ]),
+
+  // Non-downloadable / ignored MIME types
+  IGNORED_MIME_TYPES: new Set([
+    'text/html',
+    'text/plain',
+    'text/css',
+    'text/javascript',
+    'application/javascript',
+    'application/x-javascript',
+    'application/json',
+    'application/manifest+json',
+    'application/xml',
+    'text/xml',
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/svg+xml',
+    'image/x-icon',
+    'image/bmp',
+    'text/event-stream',
+  ]),
+
+  INTERCEPT_EXTENSIONS: {
+    video: ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.3gp', '.ts', '.mpg', '.mpeg'],
+    audio: ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus'],
+    archive: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.iso', '.tgz', '.7z', '.cab', '.dmg'],
+    software: ['.exe', '.msi', '.pkg', '.deb', '.rpm', '.apk', '.appx', '.appimage', '.bin', '.jar'],
+    document: ['.pdf', '.docx', '.xlsx', '.pptx', '.doc', '.xls', '.ppt', '.epub'],
+  },
+
+  /**
+   * Determine if a download should be intercepted.
+   * Filters out web pages, tracking pixels/beacons, and small non-executable/archive files.
+   *
+   * @param {Object|string} itemOrFilename - download item object or filename string
+   * @param {number} [fileSize] - bytes, -1 if unknown
+   * @param {Object} [settings] - from getSettings()
+   * @returns {boolean}
+   */
+  shouldIntercept(itemOrFilename, fileSize, settings) {
+    let filename = '';
+    let mime = '';
+    let url = '';
+    let totalBytes = fileSize || -1;
+    let currentSettings = settings || IDMM_API.defaultSettings();
+
+    if (typeof itemOrFilename === 'object' && itemOrFilename !== null) {
+      filename = itemOrFilename.filename || '';
+      mime = itemOrFilename.mime || '';
+      url = itemOrFilename.finalUrl || itemOrFilename.url || '';
+      if (itemOrFilename.totalBytes !== undefined) {
+        totalBytes = itemOrFilename.totalBytes;
+      }
+    } else {
+      filename = itemOrFilename || '';
+    }
+
+    if (!currentSettings.enabled) return false;
+    if (!filename && !url) return false;
+
+    // 1. Filter out ignored MIME types unless Content-Disposition forces attachment
+    if (mime) {
+      const cleanMime = mime.toLowerCase().split(';')[0].trim();
+      if (IDMM_API.IGNORED_MIME_TYPES.has(cleanMime)) {
+        return false;
+      }
+    }
+
+    // Extract filename from URL if filename is empty
+    let cleanFilename = filename;
+    if (!cleanFilename && url) {
+      try {
+        const u = new URL(url);
+        cleanFilename = u.pathname.split('/').pop() || '';
+      } catch {
+        cleanFilename = '';
+      }
+    }
+    cleanFilename = cleanFilename.split('?')[0].split('#')[0].trim();
+
+    const lower = cleanFilename.toLowerCase();
+    const lastDot = lower.lastIndexOf('.');
+    const ext = lastDot !== -1 ? lower.slice(lastDot) : '';
+
+    // 2. Reject explicitly ignored extensions (HTML, JS, CSS, JSON, images, web pages)
+    if (ext && IDMM_API.IGNORED_EXTENSIONS.has(ext)) {
+      return false;
+    }
+
+    // 3. Size threshold: skip very small files (< 10 KB) unless they have explicit valid download extensions
+    const isStandardDownloadExt = ext && IDMM_API.DOWNLOAD_EXTENSIONS.has(ext);
+    const minSize = currentSettings.interceptMinSize || 0;
+    if (minSize > 0 && totalBytes > 0 && totalBytes < minSize) {
+      return false;
+    }
+    // Files < 10 KB without a valid downloadable extension are likely beacons/tracking/web scraps
+    if (totalBytes > 0 && totalBytes < 10240 && !isStandardDownloadExt) {
+      return false;
+    }
+
+    // 4. If interceptAll is true:
+    // Only intercept if it has a valid downloadable extension OR totalBytes is substantial (>= 50 KB) without ignored ext
+    if (currentSettings.interceptAll) {
+      if (isStandardDownloadExt) return true;
+      if (!ext && totalBytes >= 51200) return true;
+      if (ext && !IDMM_API.IGNORED_EXTENSIONS.has(ext) && totalBytes >= 51200) return true;
+      return false;
+    }
+
+    // 5. Category-based filter
+    const categories = {
+      video: currentSettings.interceptVideo,
+      audio: currentSettings.interceptAudio,
+      archive: currentSettings.interceptArchive,
+      software: currentSettings.interceptSoftware,
+      document: currentSettings.interceptDocument,
+    };
+
+    for (const [category, enabled] of Object.entries(categories)) {
+      if (!enabled) continue;
+      const exts = IDMM_API.INTERCEPT_EXTENSIONS[category];
+      if (exts && exts.some(e => lower.endsWith(e))) return true;
+    }
+
+    return false;
+  },
+
+  //  Formatting Helpers 
+
+  formatBytes(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+  },
+
+  formatSpeed(bytesPerSec) {
+    if (!bytesPerSec) return '0 B/s';
+    return `${IDMM_API.formatBytes(bytesPerSec)}/s`;
+  },
+
+  formatETA(seconds) {
+    if (!seconds || seconds <= 0) return '--';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  },
+};
+
+if (typeof module !== 'undefined') module.exports = IDMM_API;
+

@@ -1,0 +1,408 @@
+'use strict';
+
+const { app, BrowserWindow, Tray, Menu, nativeImage, shell, dialog, ipcMain } = require('electron');
+const path = require('node:path');
+const os = require('node:os');
+const fs = require('node:fs');
+const ClipboardMonitor = require(path.join(__dirname, 'clipboard-monitor'));
+
+//  IDMM Core 
+// Resolve engine paths  works in both dev and packaged mode
+function resolveEngine() {
+  // Try multiple candidate paths (covers dev, asar, no-asar, portable)
+  const candidates = [
+    path.join(__dirname, 'app-engine'),          // electron/app-engine/ (prebuild copy)
+    path.join(__dirname, '..', 'app'),            // ../app/ (dev mode)
+    path.join(process.resourcesPath || '', 'app-engine'), // resources/app-engine/ (extraResources)
+    path.join(path.dirname(process.execPath), 'resources', 'app-engine'),
+  ];
+  for (const dir of candidates) {
+    try {
+      const testPath = path.join(dir, 'src', 'db', 'sqlite.js');
+      if (fs.existsSync(testPath)) return dir;
+    } catch {}
+  }
+  // Fallback: let it fail with a clear error
+  throw new Error(`[IDMM] Cannot find engine. Tried: ${candidates.join(', ')}`);
+}
+
+const APP_DIR = resolveEngine();
+
+const IDMMDatabase = require(path.join(APP_DIR, 'src', 'db', 'sqlite'));
+const DownloadManager = require(path.join(APP_DIR, 'src', 'engine', 'downloader'));
+const DownloadScheduler = require(path.join(APP_DIR, 'src', 'scheduler'));
+const IDMMServer = require(path.join(APP_DIR, 'src', 'server', 'server'));
+
+const DATA_DIR = path.join(os.homedir(), '.idmm');
+const DB_PATH = path.join(DATA_DIR, 'idmm.db');
+const TEMP_DIR = path.join(DATA_DIR, 'temp-node'); // P14 Node temp pisah dari Rust
+const DEFAULT_SAVE_PATH = path.join(os.homedir(), 'Downloads', 'IDMM');
+const UI_DEV_URL = 'http://localhost:5174';
+const UI_PROD_PATH = path.join(__dirname, 'ui', 'build', 'index.html');
+
+// Ensure directories
+for (const dir of [DATA_DIR, TEMP_DIR, DEFAULT_SAVE_PATH]) {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+let mainWindow = null;
+let tray = null;
+let server = null;
+let db = null;
+let downloader = null;
+
+//  Server Start 
+
+async function startServer() {
+  console.log('[IDMM] Starting server...');
+  db = await IDMMDatabase.create(DB_PATH);
+  const settingsResult = db.getAllSettings();
+  downloader = new DownloadManager({
+    db,
+    tempDir: TEMP_DIR,
+    settings: settingsResult.ok ? settingsResult.data : {},
+  });
+  const scheduler = new DownloadScheduler({ downloader });
+  server = new IDMMServer({ db, downloader, scheduler });
+
+  try {
+    await server.start();
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      // Dev mode: app/main.js already started on port 9977
+      // Don't create a duplicate server. Electron UI connects to existing WS.
+      console.log('[IDMM] Server already running on port 9977 — connecting as client-only');
+      server = null;
+      return; // Skip onComplete wiring — existing server handles it
+    }
+    throw err; // Fatal — rethrow for app.quit()
+  }
+
+  // WP-5: Wire onComplete callback — same pattern as app/main.js
+  // Save server's handler (set in server.start()), then chain our logging + broadcast
+  const serverOnComplete = downloader.onComplete;
+  const formatBytes = (bytes) => {
+    if (!bytes || bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+  };
+  downloader.onComplete = (downloadId, result) => {
+    console.log(`[IDMM] ✓ Download completed: ${result.filename} (${formatBytes(result.total_size)} in ${result.duration}s)`);
+    serverOnComplete(downloadId, result);
+    server.broadcast({ type: 'status', id: downloadId, status: 'completed' });
+  };
+
+  console.log('[IDMM] Server ready on http://127.0.0.1:9977');
+}
+
+//  Theme persistence + window overlay sync
+// Theme disimpan di userData/theme.json supaya preload/main bisa baca
+// (localStorage hanya bisa dibaca renderer, tidak oleh main process).
+
+const THEME_META = {
+  dark:  { bg: '#010102', symbol: '#f8fafc' },
+  white: { bg: '#ffffff', symbol: '#1d1d1f' },
+  brown: { bg: '#f2f0eb', symbol: '#1f1f1f' },
+  pinky: { bg: '#ffffff', symbol: '#222222' },
+};
+
+function getThemePath() {
+  return path.join(app.getPath('userData'), 'theme.json');
+}
+
+function loadTheme() {
+  try {
+    const raw = fs.readFileSync(getThemePath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (parsed && THEME_META[parsed.theme]) return parsed.theme;
+  } catch { /* no file / invalid — default */ }
+  return 'dark';
+}
+
+function saveTheme(theme) {
+  if (!THEME_META[theme]) return;
+  try {
+    fs.mkdirSync(path.dirname(getThemePath()), { recursive: true });
+    fs.writeFileSync(getThemePath(), JSON.stringify({ theme }), 'utf8');
+  } catch (err) {
+    console.error('[IDMM] Gagal simpan theme:', err.message);
+  }
+}
+
+function applyThemeToWindow(win, theme) {
+  if (!win || win.isDestroyed()) return;
+  const meta = THEME_META[theme] || THEME_META.dark;
+  try {
+    win.setTitleBarOverlay({
+      color: meta.bg,
+      symbolColor: meta.symbol,
+      height: 32,
+    });
+    win.setBackgroundColor(meta.bg);
+  } catch (err) {
+    console.error('[IDMM] Gagal set overlay:', err.message);
+  }
+}
+
+//  Window 
+
+//  Auto-start (HKCU Run registry)
+const AUTOSTART_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+function setAutoStartEnabled(enabled) {
+  if (process.platform !== 'win32') return Promise.resolve({ ok: true, skipped: true });
+  const { execFile } = require('node:child_process');
+  const exePath = process.execPath;
+  return new Promise((resolve) => {
+    const done = (err) => resolve({ ok: !err, error: err ? err.message : null });
+    if (enabled) {
+      execFile('reg', ['add', AUTOSTART_KEY, '/v', 'IDMM', '/t', 'REG_SZ', '/d', `"${exePath}"`, '/f'], (err) => done(err));
+    } else {
+      execFile('reg', ['delete', AUTOSTART_KEY, '/v', 'IDMM', '/f'], (err) => done(err));
+    }
+  });
+}
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1000,
+    height: 700,
+    minWidth: 600,
+    minHeight: 400,
+    title: 'IDMM',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    backgroundColor: THEME_META[loadTheme()].bg,
+    show: false, // Show when ready
+    autoHideMenuBar: true,
+    frame: false,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: THEME_META[loadTheme()].bg,
+      symbolColor: THEME_META[loadTheme()].symbol,
+      height: 32
+    },
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false
+    },
+  });
+
+  // Remove menu bar completely
+  mainWindow.removeMenu();
+
+    // Load UI
+    const isDev = process.argv.includes('--dev');
+    if (isDev) {
+      mainWindow.loadURL(UI_DEV_URL);
+      mainWindow.webContents.openDevTools();
+    } else {
+      mainWindow.loadFile(path.join(__dirname, 'ui', 'build', 'index.html'));
+      // Open dev tools in production temporarily to see what's failing if it's white
+      // mainWindow.webContents.openDevTools();
+    }
+
+  // Show when ready
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  // Debugging logs from renderer
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer] ${message} (line ${line})`);
+  });
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log(`[Renderer Error] Failed to load: ${errorDescription}`);
+  });
+
+  // Minimize to tray instead of closing
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      return false;
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+//  System Tray 
+
+function createTray() {
+  // Create a simple tray icon (16x16 blue circle)
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  let trayIcon;
+
+  if (fs.existsSync(iconPath)) {
+    trayIcon = nativeImage.createFromPath(iconPath);
+  } else {
+    // Create a simple 16x16 icon programmatically
+    trayIcon = nativeImage.createEmpty();
+  }
+
+  tray = new Tray(trayIcon.resize({ width: 16, height: 16 }));
+  tray.setToolTip('IDMM - Download Manager');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show IDMM',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Active Downloads: 0',
+      enabled: false,
+      id: 'active-count',
+    },
+    { type: 'separator' },
+    {
+      label: 'Open Downloads Folder',
+      click: async () => {
+        let p = DEFAULT_SAVE_PATH;
+        try {
+          if (db) {
+            const r = db.getSetting('default_save_path');
+            if (r && r.ok && r.data) p = r.data;
+          }
+        } catch {}
+        try {
+          if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+        } catch {}
+        await shell.openPath(p);
+      },
+    },
+    {
+      label: 'Open Web UI',
+      click: () => shell.openExternal('http://127.0.0.1:9977'),
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit IDMM',
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+//  App Lifecycle 
+
+app.whenReady().then(async () => {
+  try {
+    await startServer();
+    // Apply registry autostart from persisted setting (YAGNI reconcile)
+    try {
+      const r = db && db.getSetting ? db.getSetting('auto_start') : null;
+      const enabled = r && r.ok && r.data === 'true';
+      await setAutoStartEnabled(!!enabled);
+    } catch (e) { console.error('[IDMM] autostart reconcile failed:', e.message); }
+    createWindow();
+    createTray();
+
+    // Clipboard monitor — auto-detect URLs copied to clipboard
+    const clipMonitor = new ClipboardMonitor({ pollIntervalMs: 2000, cooldownMs: 10000 });
+    clipMonitor.on('url-detected', (url) => {
+      if (downloader) {
+        downloader.startDownload(url).catch(err => console.error('[Clipboard]', err.message));
+      }
+    });
+    clipMonitor.start();
+
+    // Update tray active count periodically
+    setInterval(() => {
+      if (tray && downloader) {
+        const count = downloader.getActiveCount();
+        if (tray.contextMenu) {
+          const items = tray.contextMenu.items;
+          const countItem = items.find(i => i.id === 'active-count');
+          if (countItem) countItem.label = `Active Downloads: ${count}`;
+        }
+      }
+    }, 5000);
+  } catch (err) {
+    console.error('[IDMM] Fatal:', err);
+    app.quit();
+  }
+});
+
+app.on('window-all-closed', () => {
+  // Keep running in tray (don't quit)
+});
+
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createWindow();
+  } else {
+    mainWindow.show();
+  }
+});
+
+app.on('before-quit', async () => {
+  app.isQuitting = true;
+  if (server) await server.stop();
+  if (db) db.close();
+});
+
+// Prevent multiple instances
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+// IPC Handlers
+ipcMain.handle('dialog:selectFolder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  if (!canceled) {
+    return filePaths[0];
+  }
+  return null;
+});
+
+ipcMain.handle('theme:get', () => loadTheme());
+
+ipcMain.handle('autostart:set', (event, enabled) => setAutoStartEnabled(!!enabled));
+ipcMain.handle('autostart:get', async () => {
+  if (process.platform !== 'win32') return { enabled: false, skipped: true };
+  const { execFile } = require('node:child_process');
+  return new Promise((resolve) => {
+    execFile('reg', ['query', AUTOSTART_KEY, '/v', 'IDMM'], (err) => {
+      resolve({ enabled: !err });
+    });
+  });
+});
+
+ipcMain.handle('theme:set', (event, theme) => {
+  saveTheme(theme);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  applyThemeToWindow(win, theme);
+  return { ok: true, theme };
+});
+

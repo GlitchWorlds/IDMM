@@ -1,0 +1,287 @@
+{
+  "app/deep-test.js": {
+    "mtime": 1784511619.198354,
+    "ast_hash": "44b5929135854a6daed5d1f599660841",
+    "semantic_hash": ""
+  },
+  "app/main.js": {
+    "mtime": 1785166761.2339365,
+    "ast_hash": "f74921f65f9337d11e93f6c2aada8e40",
+    "semantic_hash": ""
+  },
+  "app/package.json": {
+    "mtime": 1784442813.53984,
+    "ast_hash": "f18acec30bde3a85cc0a3e1831906e8c",
+    "semantic_hash": ""
+  },
+  "app/src/db/sqlite.js": {
+    "mtime": 1784991099.229327,
+    "ast_hash": "24220dd99164a6131348c061387b67b9",
+    "semantic_hash": ""
+  },
+  "app/src/engine/chunk-worker.js": {
+    "mtime": 1784903212.6902173,
+    "ast_hash": "961b6acce441a7bd617e873947a70e1d",
+    "semantic_hash": ""
+  },
+  "app/src/engine/download-queue.js": {
+    "mtime": 1784838996.7133243,
+    "ast_hash": "e95c3962cea001f5ce05a6e919e3f4cf",
+    "semantic_hash": ""
+  },
+  "app/src/engine/downloader.js": {
+    "mtime": 1785027083.32119,
+    "ast_hash": "7d1f8958d35f3ef02edfdf0af4dbd446",
+    "semantic_hash": ""
+  },
+  "app/src/engine/merge.js": {
+    "mtime": 1785026642.1240888,
+    "ast_hash": "527f4e92b4aa99e38a81796469824b24",
+    "semantic_hash": ""
+  },
+  "app/src/engine/resume.js": {
+    "mtime": 1785026642.1270833,
+    "ast_hash": "31a4eb4fb874e86e6aeabd4b0763d363",
+    "semantic_hash": ""
+  },
+  "app/src/engine/speed-tracker.js": {
+    "mtime": 1784903147.885946,
+    "ast_hash": "b49af280292a747b68be7aae25436bf2",
+    "semantic_hash": ""
+  },
+  "app/src/engine/worker-pool.js": {
+    "mtime": 1784903164.5431583,
+    "ast_hash": "c636a3739f1c1a370b26f921cc9b4935",
+    "semantic_hash": ""
+  },
+  "app/src/server/server.js": {
+    "mtime": 1785120882.8546865,
+    "ast_hash": "cc29cfc9cfb1bcfbfdab79fc7f654f89",
+    "semantic_hash": ""
+  },
+  "app/src/utils/filename.js": {
+    "mtime": 1784442813.5450914,
+    "ast_hash": "e3b194d45a0714a61417d5bd76ebb9cc",
+    "semantic_hash": ""
+  },
+  "app/src/utils/hash.js": {
+    "mtime": 1784867134.4857967,
+    "ast_hash": "baf9cb76ac5c3d7242324e6682e6316a",
+    "semantic_hash": ""
+  },
+  "app/src/utils/mime.js": {
+    "mtime": 1784511619.1885965,
+    "ast_hash": "d6a87f4d44ff8c3d10667fd8dd0cdb68",
+    "semantic_hash": ""
+  },
+  "app/src/utils/ssrf.js": {
+    "mtime": 1784511619.1923344,
+    "ast_hash": "df5e3c0152fbb558035506da711b54e0",
+    "semantic_hash": ""
+  },
+  "app/test.js": {
+    "mtime": 1784511619.206375,
+    "ast_hash": "53e1d4a0d7fc8dbefea8d5bcd75acd28",
+    "semantic_hash": ""
+  },
+  "app/test/integration.test.js": {
+    "mtime": 1784839802.6946023,
+    "ast_hash": "82599cecf9248a758c49f5c452ba2251",
+    "semantic_hash": ""
+  },
+  "electron/generate-icons.js": {
+    "mtime": 1784442813.5555084,
+    "ast_hash": "6465a9ac6c031d5041b7d35e10f3c709",
+    "semantic_hash": ""
+  },
+  "electron/main.js": {
+    "mtime": 1785027197.7588978,
+    "ast_hash": "9486b7bf9d15833b18aeac4ae7f31ca5",
+    "semantic_hash": ""
+  },
+  "electron/package.json": {
+    "mtime": 1784965968.0922358,
+    "ast_hash": "e0c2754affbcf2cccd5682d5284f72d7",
+    "semantic_hash": ""
+  },
+  "electron/preload.js": {
+    "mtime": 1784882937.0860648,
+    "ast_hash": "82a84dbd2c254e0fc04a8c6a27f3473a",
+    "semantic_hash": ""
+  },
+  "electron/ui/package.json": {
+    "mtime": 1784442813.5555084,
+    "ast_hash": "4cfad682c1a7b2a0c335f33eb67c84a4",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/App.jsx": {
+    "mtime": 1785122717.9028263,
+    "ast_hash": "4661ce1460c347e6235b0898491c958b",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/api.js": {
+    "mtime": 1784519501.9366844,
+    "ast_hash": "de9a4dcde3a7767b6d1353c60983418f",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/components/AddDownload.jsx": {
+    "mtime": 1784687691.3232093,
+    "ast_hash": "f53793a8414d2a3add8f5c3585a2871f",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/components/DownloadList.jsx": {
+    "mtime": 1784537259.626196,
+    "ast_hash": "3a1119a0a88d8c775ea5d8012be3637d",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/components/Header.jsx": {
+    "mtime": 1784531953.0690553,
+    "ast_hash": "3fb07c9fa291cc0aeeccc2386bff545a",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/components/Settings.jsx": {
+    "mtime": 1784967115.2702596,
+    "ast_hash": "ad163070780fd9ce403c0ecb31f82441",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/components/Sidebar.jsx": {
+    "mtime": 1785120489.6268353,
+    "ast_hash": "9e425e25505241449934a104ff43f71c",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/components/SpeedGraph.jsx": {
+    "mtime": 1784442813.5668607,
+    "ast_hash": "35f713b6f4f45fe9e8f7c71aac38f620",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/hooks/useWebSocket.js": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "053fee912e53aadef24618449671834f",
+    "semantic_hash": ""
+  },
+  "electron/ui/src/main.jsx": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "cdd82b768936c02c7313ac2fa5218f43",
+    "semantic_hash": ""
+  },
+  "electron/ui/vite.config.js": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "a5546f8007224451be9c63b0def2ed97",
+    "semantic_hash": ""
+  },
+  "extension/background.js": {
+    "mtime": 1785126577.4979062,
+    "ast_hash": "a7b20c581f3cff964054dd2a60b2a9a7",
+    "semantic_hash": ""
+  },
+  "extension/content.js": {
+    "mtime": 1785166639.9758139,
+    "ast_hash": "ce8ee79146e43059f3526bab08663b38",
+    "semantic_hash": ""
+  },
+  "extension/lib/api-client.js": {
+    "mtime": 1784511619.2284853,
+    "ast_hash": "2453ebb534cbccffc5a3910661cc2e0a",
+    "semantic_hash": ""
+  },
+  "extension/manifest.json": {
+    "mtime": 1785038201.184508,
+    "ast_hash": "6a61e04df2ce0266b6c8ea2c46ce9e03",
+    "semantic_hash": ""
+  },
+  "patch.js": {
+    "mtime": 1784485787.9656613,
+    "ast_hash": "2d43dd15231d629d4448ffea99ee0dd0",
+    "semantic_hash": ""
+  },
+  "scripts/build-xpi.js": {
+    "mtime": 1784798945.1829422,
+    "ast_hash": "f37ecb7094d2bd36a059565697ba10cd",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1785118463.1106453,
+    "ast_hash": "0a3417176ac65f65210cda1f7375d427",
+    "semantic_hash": ""
+  },
+  "electron/ui/index.html": {
+    "mtime": 1784442813.5555084,
+    "ast_hash": "c17dbbac0f4132ef3c58b582bd14f851",
+    "semantic_hash": ""
+  },
+  "extension/FIX-TASK.txt": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "5c2daf957a2773473b24a0e36656e45b",
+    "semantic_hash": ""
+  },
+  "electron/assets/icon.png": {
+    "mtime": 1784442813.5450914,
+    "ast_hash": "fe6a9873685c70a6225339cfa2494bab",
+    "semantic_hash": ""
+  },
+  "extension/icons/icon128.png": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "30759b41bda7c287a7882170b3ee4959",
+    "semantic_hash": ""
+  },
+  "extension/icons/icon16.png": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "46dba612c052f407a98b59f6e916264a",
+    "semantic_hash": ""
+  },
+  "extension/icons/icon48.png": {
+    "mtime": 1784442813.5711658,
+    "ast_hash": "f019edd0171a507f77c51ba9e17175ec",
+    "semantic_hash": ""
+  },
+  "app/data/categories.json": {
+    "mtime": 1784883269.5556376,
+    "ast_hash": "e4c1e4525e22246a47bcf6171b451022",
+    "semantic_hash": ""
+  },
+  "app/data/scheduled-jobs.json": {
+    "mtime": 1784883269.5556376,
+    "ast_hash": "edebed4c82b4f4dda06e3d837354e0e4",
+    "semantic_hash": ""
+  },
+  "app/src/routes/batch.js": {
+    "mtime": 1784883140.7481754,
+    "ast_hash": "e1d78ff303c4691c6e87bc54e0651402",
+    "semantic_hash": ""
+  },
+  "app/src/routes/categories.js": {
+    "mtime": 1784883140.7481754,
+    "ast_hash": "8e4de46d75edc99c189a20f952b04f11",
+    "semantic_hash": ""
+  },
+  "app/src/routes/history.js": {
+    "mtime": 1784883140.7481754,
+    "ast_hash": "783767a12ca63da3eca0ec9ad97b2a21",
+    "semantic_hash": ""
+  },
+  "app/src/routes/scheduler.js": {
+    "mtime": 1785026642.1286023,
+    "ast_hash": "7d2ef14d8cad6b9a1b65934abfcd9fba",
+    "semantic_hash": ""
+  },
+  "app/src/scheduler.js": {
+    "mtime": 1784883651.2832208,
+    "ast_hash": "7694f9e2fe3d1bd88edfe1182351dfe9",
+    "semantic_hash": ""
+  },
+  "data/scheduled-jobs.json": {
+    "mtime": 1784883786.4497678,
+    "ast_hash": "a200c62ae422e5d61d7c681afe51c1fd",
+    "semantic_hash": ""
+  },
+  "electron/clipboard-monitor.js": {
+    "mtime": 1784883140.7431393,
+    "ast_hash": "9f5a135f07bca0e3b138e80b194c4914",
+    "semantic_hash": ""
+  },
+  "FEATURES.md": {
+    "mtime": 1785165569.949733,
+    "ast_hash": "edabf42f61151f90de048520cdfebe60",
+    "semantic_hash": ""
+  }
+}

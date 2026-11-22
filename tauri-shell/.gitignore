@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+target/
+ui-dist/
+src-tauri/gen/
+src-tauri/resources/idmm-core.exe
+src-tauri/binaries/idmm-core-x86_64-pc-windows-msvc.exe
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

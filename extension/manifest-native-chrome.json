@@ -1,0 +1,10 @@
+{
+  "name": "com.idmm.native_host",
+  "description": "IDMM Download Manager Native Messaging Host",
+  "path": "idmm-core.exe",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://*",
+    "chrome-extension://idmm-extension@glitchworlds/"
+  ]
+}
