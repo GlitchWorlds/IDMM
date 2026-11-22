@@ -110,10 +110,37 @@ async function getTabCookies(url, tab) {
 
 const interceptedIds = new Set();
 
+chrome.downloads.onCreated.addListener(async (item) => {
+  if (interceptedIds.has(item.id)) return;
+
+  const settings = await IDMM_API.getSettings();
+  if (!settings.enabled) return;
+
+  const should = IDMM_API.shouldIntercept(item, item.totalBytes, settings);
+  if (!should) return;
+
+  // Batalkan langsung pada event onCreated sebelum browser menulis disk
+  interceptedIds.add(item.id);
+  try {
+    chrome.downloads.cancel(item.id, () => {
+      chrome.downloads.erase({ id: item.id }, () => {});
+    });
+  } catch {}
+
+  const url = item.finalUrl || item.url;
+  const cookies = item.cookie || '';
+  const referrer = item.referrer || '';
+
+  await sendToIDMM({
+    url,
+    filename: item.filename,
+    cookies,
+    referrer,
+  });
+});
+
 chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
-  // Guard: jangan intercept download yang kita cancel sendiri
   if (interceptedIds.has(item.id)) {
-    interceptedIds.delete(item.id);
     suggest();
     return;
   }
@@ -130,7 +157,13 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
     return;
   }
 
-  // Kirim ke IDMM dulu
+  interceptedIds.add(item.id);
+  try {
+    chrome.downloads.cancel(item.id, () => {
+      chrome.downloads.erase({ id: item.id }, () => {});
+    });
+  } catch {}
+
   const sent = await sendToIDMM({
     url: item.finalUrl || item.url,
     filename: item.filename,
@@ -138,22 +171,7 @@ chrome.downloads.onDeterminingFilename.addListener(async (item, suggest) => {
     referrer: item.referrer || '',
   });
 
-  if (sent.ok) {
-    interceptedIds.add(item.id);
-    // Cancel SEJAK DINI — sebelum Chrome mulai nulis file.
-    // Ini mencegah download ganda untuk file kecil yang bisa selesai < 1 detik.
-    try {
-      chrome.downloads.cancel(item.id, () => {});
-    } catch { /* item mungkin sudah selesai — biarkan */ }
-    // Beri nama unik kalau cancel kebablasan (file sudah keburu selesai),
-    // supaya file IDMM dan file browser tidak menimpa satu sama lain.
-    suggest({ filename: `__idmm_${item.id}_${item.filename}` });
-    setTimeout(() => {
-      chrome.downloads.erase({ id: item.id }, () => {});
-    }, 2000);
-  } else {
-    suggest(); // Gagal kirim — biarkan browser download normal
-  }
+  suggest();
 });
 
 // Bersihkan set agar tidak bocor memori

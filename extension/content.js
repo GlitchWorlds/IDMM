@@ -135,9 +135,10 @@
 
     if (e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return;
 
-    // e.preventDefault();
-    // e.stopPropagation();
-    // e.stopImmediatePropagation();
+    // Cegah download browser bawaan secara instan saat link diklik
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
 
     const res = await sendUrl(url);
     if (res.ok) {
