@@ -657,7 +657,19 @@ impl DownloadManager {
             for (k, v) in headers {
                 req = req.header(k.as_str(), v.as_str());
             }
-            let resp = req.send().await.map_err(|e| format!("HEAD request failed: {}", e))?;
+            
+            // Coba request HEAD terlebih dahulu. Jika server menolak (405, 400, 403), fallback ke GET Range 0-0
+            let resp = match req.send().await {
+                Ok(r) if r.status().is_success() || r.status().is_redirection() => r,
+                _ => {
+                    let mut get_req = self.client.get(&current_url)
+                        .header("Range", "bytes=0-0");
+                    for (k, v) in headers {
+                        get_req = get_req.header(k.as_str(), v.as_str());
+                    }
+                    get_req.send().await.map_err(|e| format!("Probe request failed: {}", e))?
+                }
+            };
             let status = resp.status();
 
             if status.is_redirection() {
@@ -668,12 +680,18 @@ impl DownloadManager {
                 }
             }
 
-            let content_length = resp.headers().get("content-length")
+            let content_range_len = resp.headers().get("content-range")
                 .and_then(|v| v.to_str().ok())
-                .and_then(|v| v.parse::<i64>().ok())
-                .unwrap_or(0);
+                .and_then(|v| v.split('/').last())
+                .and_then(|v| v.parse::<i64>().ok());
 
-            let accept_ranges = resp.headers().get("accept-ranges")
+            let content_length = content_range_len.or_else(|| {
+                resp.headers().get("content-length")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| v.parse::<i64>().ok())
+            }).unwrap_or(0);
+
+            let accept_ranges = status.as_u16() == 206 || resp.headers().get("accept-ranges")
                 .and_then(|v| v.to_str().ok())
                 .map(|v| v.to_lowercase().split(',').any(|t| t.trim() == "bytes"))
                 .unwrap_or(false);
